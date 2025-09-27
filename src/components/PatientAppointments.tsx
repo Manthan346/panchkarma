@@ -1,0 +1,629 @@
+import React, { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { Calendar, Clock, User, MapPin, Phone, AlertCircle, CheckCircle, XCircle, Edit, Trash2, Plus } from 'lucide-react';
+import { mockTherapySessions } from './mockData';
+import { toast } from 'sonner@2.0.3';
+import { TherapySession } from '../App';
+
+interface PatientAppointmentsProps {
+  userId: string;
+}
+
+export function PatientAppointments({ userId }: PatientAppointmentsProps) {
+  const [sessions, setSessions] = useState<TherapySession[]>(mockTherapySessions);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleData, setRescheduleData] = useState({
+    date: '',
+    time: '',
+    sessionId: ''
+  });
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [newBooking, setNewBooking] = useState({
+    therapyType: '',
+    date: '',
+    time: '',
+    practitioner: '',
+    duration: 60
+  });
+
+  // Filter sessions for this patient
+  const patientSessions = sessions.filter(session => session.patientId === userId);
+  
+  const upcomingSessions = patientSessions.filter(
+    session => new Date(session.date) >= new Date()
+  ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const pastSessions = patientSessions.filter(
+    session => new Date(session.date) < new Date()
+  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Handle session cancellation
+  const handleCancelSession = (sessionId: string) => {
+    setSessions(prev => prev.map(session => 
+      session.id === sessionId 
+        ? { ...session, status: 'cancelled' as const }
+        : session
+    ));
+    toast.success('Session cancelled successfully');
+  };
+
+  // Handle session rescheduling
+  const handleRescheduleSession = () => {
+    if (!rescheduleData.date || !rescheduleData.time) {
+      toast.error('Please select both date and time');
+      return;
+    }
+
+    setSessions(prev => prev.map(session => 
+      session.id === rescheduleData.sessionId 
+        ? { ...session, date: rescheduleData.date, time: rescheduleData.time }
+        : session
+    ));
+    
+    setIsRescheduling(false);
+    setRescheduleData({ date: '', time: '', sessionId: '' });
+    toast.success('Session rescheduled successfully');
+  };
+
+  // Handle new booking
+  const handleBookNewSession = () => {
+    if (!newBooking.therapyType || !newBooking.date || !newBooking.time || !newBooking.practitioner) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    const newSession: TherapySession = {
+      id: `session_${Date.now()}`,
+      patientId: userId,
+      therapyType: newBooking.therapyType,
+      date: newBooking.date,
+      time: newBooking.time,
+      duration: newBooking.duration,
+      status: 'scheduled',
+      practitioner: newBooking.practitioner,
+      preProcedureInstructions: [
+        'Fast for 4 hours before the session',
+        'Wear comfortable, loose-fitting clothes',
+        'Arrive 15 minutes early for consultation'
+      ],
+      postProcedureInstructions: [
+        'Rest for at least 30 minutes after the procedure',
+        'Drink warm water and avoid cold beverages',
+        'Follow prescribed dietary guidelines'
+      ]
+    };
+
+    setSessions(prev => [...prev, newSession]);
+    setShowBookingForm(false);
+    setNewBooking({
+      therapyType: '',
+      date: '',
+      time: '',
+      practitioner: '',
+      duration: 60
+    });
+    toast.success('New session booked successfully');
+  };
+
+  // Handle booking similar session
+  const handleBookSimilar = (originalSession: TherapySession) => {
+    setNewBooking({
+      therapyType: originalSession.therapyType,
+      date: '',
+      time: '',
+      practitioner: originalSession.practitioner,
+      duration: originalSession.duration
+    });
+    setShowBookingForm(true);
+  };
+
+  const SessionDetailsDialog = ({ session }: { session: any }) => (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          View Details
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Session Details</DialogTitle>
+          <DialogDescription>
+            Complete information about your therapy session
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-6">
+          {/* Session Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Therapy Type</label>
+              <p className="text-sm text-muted-foreground mt-1">{session.therapyType}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Duration</label>
+              <p className="text-sm text-muted-foreground mt-1">{session.duration} minutes</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Date & Time</label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {new Date(session.date).toLocaleDateString()} at {session.time}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Practitioner</label>
+              <p className="text-sm text-muted-foreground mt-1">{session.practitioner}</p>
+            </div>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="text-sm font-medium">Status</label>
+            <div className="mt-1">
+              <Badge variant={
+                session.status === 'completed' ? 'default' : 
+                session.status === 'cancelled' ? 'destructive' : 'secondary'
+              }>
+                {session.status === 'completed' && <CheckCircle className="w-3 h-3 mr-1" />}
+                {session.status === 'cancelled' && <XCircle className="w-3 h-3 mr-1" />}
+                {session.status === 'scheduled' && <Clock className="w-3 h-3 mr-1" />}
+                {session.status}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Pre-procedure Instructions */}
+          <div>
+            <label className="text-sm font-medium text-orange-700">Pre-Procedure Instructions</label>
+            <div className="mt-2 space-y-2">
+              {session.preProcedureInstructions.map((instruction, index) => (
+                <div key={index} className="flex items-start text-sm">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-2 flex-shrink-0" />
+                  {instruction}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Post-procedure Instructions */}
+          <div>
+            <label className="text-sm font-medium text-green-700">Post-Procedure Instructions</label>
+            <div className="mt-2 space-y-2">
+              {session.postProcedureInstructions.map((instruction, index) => (
+                <div key={index} className="flex items-start text-sm">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-2 flex-shrink-0" />
+                  {instruction}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          {session.notes && (
+            <div>
+              <label className="text-sm font-medium">Session Notes</label>
+              <p className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded-lg">
+                {session.notes}
+              </p>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-2">
+            {session.status === 'scheduled' && (
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    setRescheduleData({ ...rescheduleData, sessionId: session.id });
+                    setIsRescheduling(true);
+                  }}
+                >
+                  <Edit className="w-3 h-3 mr-1" />
+                  Reschedule
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <Trash2 className="w-3 h-3 mr-1" />
+                      Cancel
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancel Session</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to cancel this therapy session? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep Session</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => handleCancelSession(session.id)}>
+                        Cancel Session
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+            {session.status === 'completed' && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleBookSimilar(session)}
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                Book Follow-up
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Appointment Management</CardTitle>
+          <CardDescription>
+            View your scheduled sessions and manage appointments
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex space-x-4">
+            <Button onClick={() => setShowBookingForm(true)}>
+              <Calendar className="w-4 h-4 mr-2" />
+              Book New Session
+            </Button>
+            <Button variant="outline" onClick={() => toast.info('Calling clinic at +1 (555) 123-4567')}>
+              <Phone className="w-4 h-4 mr-2" />
+              Contact Clinic
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Upcoming Sessions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Upcoming Appointments</CardTitle>
+          <CardDescription>
+            Your scheduled therapy sessions
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {upcomingSessions.length > 0 ? (
+              upcomingSessions.map((session) => (
+                <div key={session.id} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-medium">{session.therapyType}</h3>
+                        <Badge variant="secondary">
+                          <Clock className="w-3 h-3 mr-1" />
+                          {session.duration}min
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                        <div className="flex items-center">
+                          <Calendar className="w-4 h-4 mr-1" />
+                          {new Date(session.date).toLocaleDateString()}
+                        </div>
+                        <div className="flex items-center">
+                          <Clock className="w-4 h-4 mr-1" />
+                          {session.time}
+                        </div>
+                        <div className="flex items-center">
+                          <User className="w-4 h-4 mr-1" />
+                          {session.practitioner}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <SessionDetailsDialog session={session} />
+                    </div>
+                  </div>
+
+                  {/* Quick Pre-care Reminder */}
+                  <div className="bg-orange-50 p-3 rounded-lg">
+                    <div className="flex items-start space-x-2">
+                      <AlertCircle className="w-4 h-4 text-orange-600 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-orange-800">Pre-care Reminder</p>
+                        <p className="text-sm text-orange-700">
+                          {session.preProcedureInstructions[0]}
+                        </p>
+                        <Button variant="link" className="text-orange-700 p-0 h-auto text-sm">
+                          View all instructions
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No upcoming appointments</p>
+                <Button className="mt-4" onClick={() => setShowBookingForm(true)}>Schedule Your Next Session</Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Session History */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Session History</CardTitle>
+          <CardDescription>
+            Your completed and past therapy sessions
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {pastSessions.length > 0 ? (
+              pastSessions.map((session) => (
+                <div key={session.id} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-medium">{session.therapyType}</h3>
+                        <Badge variant={session.status === 'completed' ? 'default' : 'destructive'}>
+                          {session.status === 'completed' && <CheckCircle className="w-3 h-3 mr-1" />}
+                          {session.status === 'cancelled' && <XCircle className="w-3 h-3 mr-1" />}
+                          {session.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                        <div className="flex items-center">
+                          <Calendar className="w-4 h-4 mr-1" />
+                          {new Date(session.date).toLocaleDateString()}
+                        </div>
+                        <div className="flex items-center">
+                          <Clock className="w-4 h-4 mr-1" />
+                          {session.time}
+                        </div>
+                        <div className="flex items-center">
+                          <User className="w-4 h-4 mr-1" />
+                          {session.practitioner}
+                        </div>
+                      </div>
+                      {session.notes && (
+                        <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                          <strong>Notes:</strong> {session.notes}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex space-x-2">
+                      <SessionDetailsDialog session={session} />
+                      {session.status === 'completed' && (
+                        <Button variant="outline" size="sm" onClick={() => handleBookSimilar(session)}>
+                          Book Similar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Post-care Instructions for completed sessions */}
+                  {session.status === 'completed' && (
+                    <div className="bg-green-50 p-3 rounded-lg">
+                      <div className="flex items-start space-x-2">
+                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-green-800">Post-care Instructions</p>
+                          <p className="text-sm text-green-700">
+                            {session.postProcedureInstructions[0]}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No session history available</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Contact Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Clinic Contact Information</CardTitle>
+          <CardDescription>
+            Get in touch for appointments or questions
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div className="flex items-center space-x-3">
+                <Phone className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Phone</p>
+                  <p className="text-sm text-muted-foreground">+1 (555) 123-4567</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <MapPin className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Address</p>
+                  <p className="text-sm text-muted-foreground">
+                    123 Wellness Center Ave<br />
+                    Ayurveda City, AC 12345
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium">Operating Hours</p>
+                <div className="text-sm text-muted-foreground mt-1">
+                  <p>Monday - Friday: 9:00 AM - 6:00 PM</p>
+                  <p>Saturday: 9:00 AM - 4:00 PM</p>
+                  <p>Sunday: Closed</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Reschedule Dialog */}
+      <Dialog open={isRescheduling} onOpenChange={setIsRescheduling}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reschedule Session</DialogTitle>
+            <DialogDescription>
+              Select a new date and time for your therapy session
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="reschedule-date">New Date</Label>
+              <Input
+                id="reschedule-date"
+                type="date"
+                value={rescheduleData.date}
+                onChange={(e) => setRescheduleData({...rescheduleData, date: e.target.value})}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="reschedule-time">New Time</Label>
+              <Select value={rescheduleData.time} onValueChange={(value) => setRescheduleData({...rescheduleData, time: value})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="09:00">9:00 AM</SelectItem>
+                  <SelectItem value="10:00">10:00 AM</SelectItem>
+                  <SelectItem value="11:00">11:00 AM</SelectItem>
+                  <SelectItem value="14:00">2:00 PM</SelectItem>
+                  <SelectItem value="15:00">3:00 PM</SelectItem>
+                  <SelectItem value="16:00">4:00 PM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setIsRescheduling(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRescheduleSession}>
+                Reschedule Session
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Booking Dialog */}
+      <Dialog open={showBookingForm} onOpenChange={setShowBookingForm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Book New Session</DialogTitle>
+            <DialogDescription>
+              Schedule a new therapy session
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="therapy-type">Therapy Type</Label>
+              <Select value={newBooking.therapyType} onValueChange={(value) => setNewBooking({...newBooking, therapyType: value})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select therapy type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Abhyanga">Abhyanga (Oil Massage)</SelectItem>
+                  <SelectItem value="Shirodhara">Shirodhara</SelectItem>
+                  <SelectItem value="Panchakarma Detox">Panchakarma Detox</SelectItem>
+                  <SelectItem value="Udvartana">Udvartana (Herbal Scrub)</SelectItem>
+                  <SelectItem value="Kizhi">Kizhi (Herbal Poultice)</SelectItem>
+                  <SelectItem value="Nasya">Nasya (Nasal Therapy)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="booking-date">Date</Label>
+              <Input
+                id="booking-date"
+                type="date"
+                value={newBooking.date}
+                onChange={(e) => setNewBooking({...newBooking, date: e.target.value})}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="booking-time">Time</Label>
+              <Select value={newBooking.time} onValueChange={(value) => setNewBooking({...newBooking, time: value})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="09:00">9:00 AM</SelectItem>
+                  <SelectItem value="10:00">10:00 AM</SelectItem>
+                  <SelectItem value="11:00">11:00 AM</SelectItem>
+                  <SelectItem value="14:00">2:00 PM</SelectItem>
+                  <SelectItem value="15:00">3:00 PM</SelectItem>
+                  <SelectItem value="16:00">4:00 PM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="practitioner">Practitioner</Label>
+              <Select value={newBooking.practitioner} onValueChange={(value) => setNewBooking({...newBooking, practitioner: value})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select practitioner" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Dr. Priya Sharma">Dr. Priya Sharma</SelectItem>
+                  <SelectItem value="Dr. Raj Patel">Dr. Raj Patel</SelectItem>
+                  <SelectItem value="Dr. Anita Desai">Dr. Anita Desai</SelectItem>
+                  <SelectItem value="Dr. Vikram Singh">Dr. Vikram Singh</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="duration">Duration (minutes)</Label>
+              <Select value={newBooking.duration.toString()} onValueChange={(value) => setNewBooking({...newBooking, duration: parseInt(value)})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="60">60 minutes</SelectItem>
+                  <SelectItem value="90">90 minutes</SelectItem>
+                  <SelectItem value="120">120 minutes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowBookingForm(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleBookNewSession}>
+                Book Session
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
