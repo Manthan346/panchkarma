@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
-import { Calendar, Users, Clock, Bell, LogOut, Plus, Settings } from 'lucide-react';
-import { User } from '../App';
-import { mockPatients, mockTherapySessions } from './mockData';
+import { Calendar, Users, Clock, Bell, LogOut, Plus, Settings, Loader2 } from 'lucide-react';
+import { User, Patient, TherapySession } from '../App';
+import { databaseService } from '../utils/database';
 import { PatientManagement } from './PatientManagement';
+import { DoctorManagement } from './DoctorManagement';
 import { TherapyScheduling } from './TherapyScheduling';
 import { AdminAnalytics } from './AdminAnalytics';
 import { NotificationCenter } from './NotificationCenter';
+import { toast } from 'sonner@2.0.3';
+import type { Doctor } from '../App';
 
 interface AdminDashboardProps {
   user: User;
@@ -18,18 +21,70 @@ interface AdminDashboardProps {
 
 export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [sessions, setSessions] = useState<TherapySession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const todaysSessions = mockTherapySessions.filter(
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch patients
+        const patientsData = await databaseService.patients.getPatients();
+        setPatients(patientsData);
+
+        // Fetch doctors
+        const doctorsData = await databaseService.doctors.getDoctors();
+        setDoctors(doctorsData);
+
+        // Fetch therapy sessions
+        const sessionsData = await databaseService.therapySessions.getTherapySessions();
+        setSessions(sessionsData);
+
+      } catch (error) {
+        console.error('Error fetching admin data:', error);
+        toast.error('Failed to load admin dashboard data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAdminData();
+  }, []);
+
+  const todaysSessions = sessions.filter(
     session => session.date === new Date().toISOString().split('T')[0]
   );
 
-  const upcomingSessions = mockTherapySessions.filter(
+  const upcomingSessions = sessions.filter(
     session => new Date(session.date) > new Date()
   );
 
-  const completedSessions = mockTherapySessions.filter(
+  const completedSessions = sessions.filter(
     session => session.status === 'completed'
   );
+
+  // Helper function to get active therapies count for a patient
+  const getActiveTherapiesCount = (patientId: string) => {
+    return sessions.filter(
+      session => session.patient_id === patientId && 
+      (session.status === 'scheduled' || session.status === 'completed') &&
+      new Date(session.date) >= new Date()
+    ).length;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-muted-foreground">Loading admin dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,12 +113,14 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="patients">Patients</TabsTrigger>
+            <TabsTrigger value="doctors">Doctors</TabsTrigger>
             <TabsTrigger value="scheduling">Scheduling</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -75,7 +132,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{mockPatients.length}</div>
+                  <div className="text-2xl font-bold">{patients.length}</div>
                   <p className="text-xs text-muted-foreground">
                     Active in treatment
                   </p>
@@ -122,6 +179,8 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               </Card>
             </div>
 
+
+
             {/* Recent Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
@@ -137,7 +196,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       todaysSessions.map((session) => (
                         <div key={session.id} className="flex items-center justify-between p-3 border rounded-lg">
                           <div>
-                            <p className="font-medium">{session.therapyType}</p>
+                            <p className="font-medium">{session.therapy_type}</p>
                             <p className="text-sm text-muted-foreground">
                               {session.time} - {session.practitioner}
                             </p>
@@ -167,12 +226,12 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {mockPatients.slice(0, 3).map((patient) => (
+                    {patients.slice(0, 3).map((patient) => (
                       <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
                           <p className="font-medium">{patient.name}</p>
                           <p className="text-sm text-muted-foreground">
-                            Age: {patient.age} | {patient.currentTherapies.length} active therapies
+                            Age: {patient.age} | {getActiveTherapiesCount(patient.id)} active therapies
                           </p>
                         </div>
                         <Button variant="outline" size="sm">
@@ -187,7 +246,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           </TabsContent>
 
           <TabsContent value="patients">
-            <PatientManagement />
+            <PatientManagement patients={patients} setPatients={setPatients} />
+          </TabsContent>
+
+          <TabsContent value="doctors">
+            <DoctorManagement doctors={doctors} setDoctors={setDoctors} />
           </TabsContent>
 
           <TabsContent value="scheduling">
@@ -200,6 +263,50 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
           <TabsContent value="notifications">
             <NotificationCenter />
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-6">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>System Information</CardTitle>
+                  <CardDescription>
+                    Application configuration and system details
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">Application Mode:</span>
+                      <Badge className="ml-2">Panchakarma Management System</Badge>
+                    </div>
+                    <div>
+                      <span className="font-medium">Build Version:</span>
+                      <span className="ml-2 text-muted-foreground">1.0.0</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">Database:</span>
+                      <span className="ml-2 text-muted-foreground">Supabase PostgreSQL</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">Authentication:</span>
+                      <span className="ml-2 text-muted-foreground">JWT Tokens</span>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 border-t">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      📚 For deployment instructions and troubleshooting, please refer to:
+                    </p>
+                    <ul className="text-sm space-y-1 ml-4">
+                      <li>• <code className="bg-muted px-1 py-0.5 rounded">DEPLOYMENT.md</code> - Full deployment guide</li>
+                      <li>• <code className="bg-muted px-1 py-0.5 rounded">QUICK_START.md</code> - Quick start guide</li>
+                      <li>• <code className="bg-muted px-1 py-0.5 rounded">FIXES_APPLIED.md</code> - Technical details</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

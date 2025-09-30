@@ -24,7 +24,7 @@ export const mockTherapySessions: TherapySession[] = [
     id: '1',
     patientId: '2',
     therapyType: 'Abhyanga (Oil Massage)',
-    date: '2024-01-15',
+    date: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow
     time: '09:00',
     duration: 60,
     status: 'scheduled',
@@ -46,7 +46,7 @@ export const mockTherapySessions: TherapySession[] = [
     id: '2',
     patientId: '2',
     therapyType: 'Swedana (Steam Therapy)',
-    date: '2024-01-16',
+    date: new Date(Date.now() - 86400000).toISOString().split('T')[0], // Yesterday
     time: '10:00',
     duration: 45,
     status: 'completed',
@@ -67,7 +67,7 @@ export const mockTherapySessions: TherapySession[] = [
     id: '3',
     patientId: '2',
     therapyType: 'Shirodhara (Oil Pouring)',
-    date: '2024-01-17',
+    date: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0], // Day after tomorrow
     time: '11:00',
     duration: 90,
     status: 'scheduled',
@@ -90,7 +90,7 @@ export const mockTherapySessions: TherapySession[] = [
 export const mockProgressData: ProgressData[] = [
   {
     id: '1',
-    date: '2024-01-10',
+    date: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0], // 7 days ago
     symptomScore: 7,
     energyLevel: 6,
     sleepQuality: 5,
@@ -99,7 +99,7 @@ export const mockProgressData: ProgressData[] = [
   },
   {
     id: '2',
-    date: '2024-01-12',
+    date: new Date(Date.now() - 5 * 86400000).toISOString().split('T')[0], // 5 days ago
     symptomScore: 6,
     energyLevel: 7,
     sleepQuality: 6,
@@ -108,7 +108,7 @@ export const mockProgressData: ProgressData[] = [
   },
   {
     id: '3',
-    date: '2024-01-14',
+    date: new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0], // 3 days ago
     symptomScore: 5,
     energyLevel: 8,
     sleepQuality: 7,
@@ -124,7 +124,7 @@ export const mockNotifications: Notification[] = [
     type: 'pre-procedure',
     title: 'Tomorrow\'s Abhyanga Treatment',
     message: 'Please fast for 2 hours before your 9:00 AM appointment. Wear comfortable clothing.',
-    date: '2024-01-14',
+    date: new Date().toISOString().split('T')[0], // Today
     read: false,
     urgent: true
   },
@@ -133,7 +133,7 @@ export const mockNotifications: Notification[] = [
     type: 'post-procedure',
     title: 'Post-Treatment Care',
     message: 'Remember to rest for 30 minutes and drink warm water. Avoid cold exposure.',
-    date: '2024-01-16',
+    date: new Date(Date.now() - 86400000).toISOString().split('T')[0], // Yesterday
     read: true,
     urgent: false
   },
@@ -141,8 +141,8 @@ export const mockNotifications: Notification[] = [
     id: '3',
     type: 'appointment',
     title: 'Upcoming Shirodhara Session',
-    message: 'Your Shirodhara treatment is scheduled for Jan 17th at 11:00 AM with Dr. Kumar.',
-    date: '2024-01-15',
+    message: 'Your Shirodhara treatment is scheduled for tomorrow at 11:00 AM with Dr. Kumar.',
+    date: new Date().toISOString().split('T')[0], // Today
     read: false,
     urgent: false
   },
@@ -151,7 +151,7 @@ export const mockNotifications: Notification[] = [
     type: 'reminder',
     title: 'Daily Progress Update',
     message: 'Please update your daily symptoms and energy levels in the app.',
-    date: '2024-01-15',
+    date: new Date().toISOString().split('T')[0], // Today
     read: false,
     urgent: false
   }

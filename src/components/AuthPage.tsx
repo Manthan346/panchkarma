@@ -6,7 +6,8 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { User } from '../App';
-import { mockUsers } from './mockData';
+import { databaseService } from '../utils/database';
+import { toast } from 'sonner@2.0.3';
 
 interface AuthPageProps {
   onLogin: (user: User) => void;
@@ -18,53 +19,50 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     name: '',
     email: '',
     password: '',
-    role: 'patient' as 'admin' | 'patient'
+    role: 'patient' as 'admin' | 'patient' | 'doctor'
   });
   const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const user = mockUsers.find(
-      u => u.email === loginData.email && u.password === loginData.password
-    );
-
-    if (user) {
+    try {
+      const user = await databaseService.auth.login(loginData.email, loginData.password);
+      toast.success(`Welcome back, ${user.name}!`);
       onLogin(user);
-    } else {
-      setError('Invalid email or password');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (!signupData.name || !signupData.email || !signupData.password) {
       setError('All fields are required');
+      toast.error('All fields are required');
       return;
     }
 
-    // Check if user already exists
-    const existingUser = mockUsers.find(u => u.email === signupData.email);
-    if (existingUser) {
-      setError('User with this email already exists');
-      return;
+    try {
+      const newUser = await databaseService.users.createUser({
+        name: signupData.name,
+        email: signupData.email,
+        password: signupData.password,
+        role: signupData.role
+      });
+
+      toast.success(`Welcome to Panchakarma Management System, ${newUser.name}!`);
+      onLogin(newUser);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Signup failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
     }
-
-    // Create new user
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: signupData.name,
-      email: signupData.email,
-      password: signupData.password,
-      role: signupData.role
-    };
-
-    // In a real app, this would be saved to database
-    mockUsers.push(newUser);
-    onLogin(newUser);
   };
 
   return (
@@ -94,6 +92,12 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg text-sm">
+                  <p className="font-medium mb-2">Demo Credentials:</p>
+                  <p><strong>Admin:</strong> admin@panchakarma.com / admin123</p>
+                  <p><strong>Doctor:</strong> sharma@panchakarma.com / doctor123</p>
+                  <p><strong>Patient:</strong> patient@example.com / patient123</p>
+                </div>
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
@@ -129,6 +133,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                   <p className="text-sm font-medium mb-2">Demo Accounts:</p>
                   <div className="text-sm space-y-1">
                     <p><strong>Admin:</strong> admin@panchakarma.com / admin123</p>
+                    <p><strong>Doctor:</strong> sharma@panchakarma.com / doctor123</p>
                     <p><strong>Patient:</strong> patient@example.com / patient123</p>
                   </div>
                 </div>
@@ -182,7 +187,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                     <Label htmlFor="role">Account Type</Label>
                     <Select
                       value={signupData.role}
-                      onValueChange={(value: 'admin' | 'patient') => 
+                      onValueChange={(value: 'admin' | 'patient' | 'doctor') => 
                         setSignupData({...signupData, role: value})
                       }
                     >
@@ -191,6 +196,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="patient">Patient</SelectItem>
+                        <SelectItem value="doctor">Doctor</SelectItem>
                         <SelectItem value="admin">Administrator</SelectItem>
                       </SelectContent>
                     </Select>

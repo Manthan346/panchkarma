@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -9,14 +9,36 @@ import { Progress } from './ui/progress';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Plus, TrendingUp, Activity, Heart, Moon, Smile } from 'lucide-react';
-import { mockProgressData } from './mockData';
+import { Plus, TrendingUp, Activity, Heart, Moon, Smile, Loader2 } from 'lucide-react';
+import { ProgressData } from '../App';
+import { databaseService } from '../utils/database';
+import { toast } from 'sonner@2.0.3';
 
 interface PatientProgressProps {
   userId: string;
 }
 
 export function PatientProgress({ userId }: PatientProgressProps) {
+  const [progressData, setProgressData] = useState<ProgressData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load progress data from database
+  useEffect(() => {
+    loadProgressData();
+  }, [userId]);
+
+  const loadProgressData = async () => {
+    try {
+      setIsLoading(true);
+      const data = await databaseService.progress.getPatientProgress(userId);
+      setProgressData(data);
+    } catch (error) {
+      console.error('Failed to load progress data:', error);
+      toast.error('Failed to load progress data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const [isAddingProgress, setIsAddingProgress] = useState(false);
   const [progressForm, setProgressForm] = useState({
     symptomScore: [5],
@@ -27,8 +49,8 @@ export function PatientProgress({ userId }: PatientProgressProps) {
   });
 
   // Calculate trends
-  const latestProgress = mockProgressData[mockProgressData.length - 1];
-  const previousProgress = mockProgressData[mockProgressData.length - 2];
+  const latestProgress = progressData[progressData.length - 1];
+  const previousProgress = progressData[progressData.length - 2];
   
   const trends = {
     symptom: latestProgress && previousProgress ? 
@@ -37,6 +59,41 @@ export function PatientProgress({ userId }: PatientProgressProps) {
       ((latestProgress.energyLevel - previousProgress.energyLevel) > 0 ? 'improving' : 'declining') : 'stable',
     sleep: latestProgress && previousProgress ? 
       ((latestProgress.sleepQuality - previousProgress.sleepQuality) > 0 ? 'improving' : 'declining') : 'stable'
+  };
+
+  // Handle adding new progress entry
+  const handleAddProgress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const progressData = {
+        patient_id: userId,
+        date: new Date().toISOString().split('T')[0],
+        symptom_score: progressForm.symptomScore[0],
+        energy_level: progressForm.energyLevel[0],
+        sleep_quality: progressForm.sleepQuality[0],
+        notes: progressForm.notes,
+        feedback: progressForm.feedback
+      };
+
+      const newProgress = await databaseService.progress.createProgressEntry(progressData);
+      setProgressData(prev => [...prev, newProgress]);
+      
+      // Reset form
+      setProgressForm({
+        symptomScore: [5],
+        energyLevel: [5],
+        sleepQuality: [5],
+        notes: '',
+        feedback: ''
+      });
+      
+      setIsAddingProgress(false);
+      toast.success('Progress update saved successfully');
+    } catch (error) {
+      console.error('Failed to save progress:', error);
+      toast.error('Failed to save progress update');
+    }
   };
 
   const AddProgressDialog = () => (
@@ -54,7 +111,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
             Track your daily wellness metrics and provide feedback
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-6">
+        <form onSubmit={handleAddProgress} className="space-y-6">
           <div className="space-y-4">
             <div>
               <Label className="text-sm font-medium">
@@ -131,7 +188,16 @@ export function PatientProgress({ userId }: PatientProgressProps) {
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" type="button" onClick={() => setIsAddingProgress(false)}>
+            <Button variant="outline" type="button" onClick={() => {
+              setIsAddingProgress(false);
+              setProgressForm({
+                symptomScore: [5],
+                energyLevel: [5],
+                sleepQuality: [5],
+                notes: '',
+                feedback: ''
+              });
+            }}>
               Cancel
             </Button>
             <Button type="submit">Save Progress</Button>
@@ -140,6 +206,21 @@ export function PatientProgress({ userId }: PatientProgressProps) {
       </DialogContent>
     </Dialog>
   );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Loading progress data...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -234,7 +315,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={mockProgressData}>
+              <LineChart data={progressData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis domain={[0, 10]} />
@@ -275,7 +356,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={mockProgressData}>
+              <AreaChart data={progressData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis domain={[0, 10]} />
@@ -312,21 +393,21 @@ export function PatientProgress({ userId }: PatientProgressProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {mockProgressData.slice().reverse().map((entry) => (
+            {progressData.slice().reverse().map((entry) => (
               <div key={entry.id} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-medium">{new Date(entry.date).toLocaleDateString()}</p>
                     <div className="flex space-x-4 mt-2">
-                      <div class="flex items-center space-x-1">
+                      <div className="flex items-center space-x-1">
                         <Heart className="w-4 h-4 text-red-500" />
                         <span className="text-sm">Symptoms: {entry.symptomScore}/10</span>
                       </div>
-                      <div class="flex items-center space-x-1">
+                      <div className="flex items-center space-x-1">
                         <Activity className="w-4 h-4 text-green-500" />
                         <span className="text-sm">Energy: {entry.energyLevel}/10</span>
                       </div>
-                      <div class="flex items-center space-x-1">
+                      <div className="flex items-center space-x-1">
                         <Moon className="w-4 h-4 text-blue-500" />
                         <span className="text-sm">Sleep: {entry.sleepQuality}/10</span>
                       </div>
@@ -334,7 +415,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
                   </div>
                   <Badge variant="outline">
                     <Smile className="w-3 h-3 mr-1" />
-                    Day {mockProgressData.indexOf(entry) + 1}
+                    Day {progressData.indexOf(entry) + 1}
                   </Badge>
                 </div>
                 

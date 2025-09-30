@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -7,8 +7,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { Calendar, Clock, User, MapPin, Phone, AlertCircle, CheckCircle, XCircle, Edit, Trash2, Plus } from 'lucide-react';
-import { mockTherapySessions } from './mockData';
+import { Calendar, Clock, User, MapPin, Phone, AlertCircle, CheckCircle, XCircle, Edit, Trash2, Plus, Loader2 } from 'lucide-react';
+import { databaseService } from '../utils/database';
 import { toast } from 'sonner@2.0.3';
 import { TherapySession } from '../App';
 
@@ -17,7 +17,11 @@ interface PatientAppointmentsProps {
 }
 
 export function PatientAppointments({ userId }: PatientAppointmentsProps) {
-  const [sessions, setSessions] = useState<TherapySession[]>(mockTherapySessions);
+  const [sessions, setSessions] = useState<TherapySession[]>([]);
+  const [therapyTypes, setTherapyTypes] = useState<any[]>([]);
+  const [practitioners, setPractitioners] = useState<string[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [rescheduleData, setRescheduleData] = useState({
@@ -27,15 +31,42 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
   });
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [newBooking, setNewBooking] = useState({
-    therapyType: '',
+    therapy_type: '',
     date: '',
     time: '',
     practitioner: '',
+    doctor_id: '',
     duration: 60
   });
 
+  useEffect(() => {
+    loadData();
+  }, [userId]);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [sessionsData, therapyTypesData, practitionersData, doctorsData] = await Promise.all([
+        databaseService.therapySessions.getPatientTherapySessions(userId),
+        databaseService.referenceData.getTherapyTypes(),
+        databaseService.referenceData.getPractitioners(),
+        databaseService.doctors.getDoctors()
+      ]);
+
+      setSessions(sessionsData);
+      setTherapyTypes(therapyTypesData);
+      setPractitioners(practitionersData);
+      setDoctors(doctorsData);
+    } catch (error) {
+      console.error('Failed to load appointments data:', error);
+      toast.error('Failed to load appointments');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Filter sessions for this patient
-  const patientSessions = sessions.filter(session => session.patientId === userId);
+  const patientSessions = sessions.filter(session => session.patient_id === userId);
   
   const upcomingSessions = patientSessions.filter(
     session => new Date(session.date) >= new Date()
@@ -46,80 +77,104 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
   ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   // Handle session cancellation
-  const handleCancelSession = (sessionId: string) => {
-    setSessions(prev => prev.map(session => 
-      session.id === sessionId 
-        ? { ...session, status: 'cancelled' as const }
-        : session
-    ));
-    toast.success('Session cancelled successfully');
+  const handleCancelSession = async (sessionId: string) => {
+    try {
+      await databaseService.therapySessions.updateTherapySession(sessionId, { status: 'cancelled' });
+      setSessions(prev => prev.map(session => 
+        session.id === sessionId 
+          ? { ...session, status: 'cancelled' as const }
+          : session
+      ));
+      toast.success('Session cancelled successfully');
+    } catch (error) {
+      console.error('Failed to cancel session:', error);
+      toast.error('Failed to cancel session');
+    }
   };
 
   // Handle session rescheduling
-  const handleRescheduleSession = () => {
+  const handleRescheduleSession = async () => {
     if (!rescheduleData.date || !rescheduleData.time) {
       toast.error('Please select both date and time');
       return;
     }
 
-    setSessions(prev => prev.map(session => 
-      session.id === rescheduleData.sessionId 
-        ? { ...session, date: rescheduleData.date, time: rescheduleData.time }
-        : session
-    ));
-    
-    setIsRescheduling(false);
-    setRescheduleData({ date: '', time: '', sessionId: '' });
-    toast.success('Session rescheduled successfully');
+    try {
+      await databaseService.therapySessions.updateTherapySession(rescheduleData.sessionId, {
+        date: rescheduleData.date,
+        time: rescheduleData.time
+      });
+      
+      setSessions(prev => prev.map(session => 
+        session.id === rescheduleData.sessionId 
+          ? { ...session, date: rescheduleData.date, time: rescheduleData.time }
+          : session
+      ));
+      
+      setIsRescheduling(false);
+      setRescheduleData({ date: '', time: '', sessionId: '' });
+      toast.success('Session rescheduled successfully');
+    } catch (error) {
+      console.error('Failed to reschedule session:', error);
+      toast.error('Failed to reschedule session');
+    }
   };
 
   // Handle new booking
-  const handleBookNewSession = () => {
-    if (!newBooking.therapyType || !newBooking.date || !newBooking.time || !newBooking.practitioner) {
+  const handleBookNewSession = async () => {
+    if (!newBooking.therapy_type || !newBooking.date || !newBooking.time || !newBooking.practitioner) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    const newSession: TherapySession = {
-      id: `session_${Date.now()}`,
-      patientId: userId,
-      therapyType: newBooking.therapyType,
-      date: newBooking.date,
-      time: newBooking.time,
-      duration: newBooking.duration,
-      status: 'scheduled',
-      practitioner: newBooking.practitioner,
-      preProcedureInstructions: [
-        'Fast for 4 hours before the session',
-        'Wear comfortable, loose-fitting clothes',
-        'Arrive 15 minutes early for consultation'
-      ],
-      postProcedureInstructions: [
-        'Rest for at least 30 minutes after the procedure',
-        'Drink warm water and avoid cold beverages',
-        'Follow prescribed dietary guidelines'
-      ]
-    };
+    try {
+      const sessionData = {
+        patient_id: userId,
+        therapy_type: newBooking.therapy_type,
+        date: newBooking.date,
+        time: newBooking.time,
+        duration: newBooking.duration,
+        status: 'scheduled',
+        practitioner: newBooking.practitioner,
+        doctor_id: newBooking.doctor_id || undefined,
+        pre_procedure_instructions: [
+          'Fast for 4 hours before the session',
+          'Wear comfortable, loose-fitting clothes',
+          'Arrive 15 minutes early for consultation'
+        ],
+        post_procedure_instructions: [
+          'Rest for at least 30 minutes after the procedure',
+          'Drink warm water and avoid cold beverages',
+          'Follow prescribed dietary guidelines'
+        ]
+      };
 
-    setSessions(prev => [...prev, newSession]);
-    setShowBookingForm(false);
-    setNewBooking({
-      therapyType: '',
-      date: '',
-      time: '',
-      practitioner: '',
-      duration: 60
-    });
-    toast.success('New session booked successfully');
+      const newSession = await databaseService.therapySessions.createTherapySession(sessionData);
+      setSessions(prev => [...prev, newSession]);
+      setShowBookingForm(false);
+      setNewBooking({
+        therapy_type: '',
+        date: '',
+        time: '',
+        practitioner: '',
+        doctor_id: '',
+        duration: 60
+      });
+      toast.success('New session booked successfully');
+    } catch (error) {
+      console.error('Failed to book new session:', error);
+      toast.error('Failed to book new session');
+    }
   };
 
   // Handle booking similar session
   const handleBookSimilar = (originalSession: TherapySession) => {
     setNewBooking({
-      therapyType: originalSession.therapyType,
+      therapy_type: originalSession.therapy_type,
       date: '',
       time: '',
       practitioner: originalSession.practitioner,
+      doctor_id: originalSession.doctor_id || '',
       duration: originalSession.duration
     });
     setShowBookingForm(true);
@@ -144,7 +199,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium">Therapy Type</label>
-              <p className="text-sm text-muted-foreground mt-1">{session.therapyType}</p>
+              <p className="text-sm text-muted-foreground mt-1">{session.therapy_type}</p>
             </div>
             <div>
               <label className="text-sm font-medium">Duration</label>
@@ -157,8 +212,12 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
               </p>
             </div>
             <div>
-              <label className="text-sm font-medium">Practitioner</label>
-              <p className="text-sm text-muted-foreground mt-1">{session.practitioner}</p>
+              <label className="text-sm font-medium">
+                {session.doctor_id ? 'Doctor' : 'Practitioner'}
+              </label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {session.doctor_id && '🩺 '}{session.practitioner}
+              </p>
             </div>
           </div>
 
@@ -182,7 +241,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
           <div>
             <label className="text-sm font-medium text-orange-700">Pre-Procedure Instructions</label>
             <div className="mt-2 space-y-2">
-              {session.preProcedureInstructions.map((instruction, index) => (
+              {session.pre_procedure_instructions.map((instruction, index) => (
                 <div key={index} className="flex items-start text-sm">
                   <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-2 flex-shrink-0" />
                   {instruction}
@@ -195,7 +254,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
           <div>
             <label className="text-sm font-medium text-green-700">Post-Procedure Instructions</label>
             <div className="mt-2 space-y-2">
-              {session.postProcedureInstructions.map((instruction, index) => (
+              {session.post_procedure_instructions.map((instruction, index) => (
                 <div key={index} className="flex items-start text-sm">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-2 flex-shrink-0" />
                   {instruction}
@@ -269,6 +328,17 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
     </Dialog>
   );
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-muted-foreground">Loading appointments...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Quick Actions */}
@@ -309,7 +379,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
                   <div className="flex justify-between items-start">
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
-                        <h3 className="font-medium">{session.therapyType}</h3>
+                        <h3 className="font-medium">{session.therapy_type}</h3>
                         <Badge variant="secondary">
                           <Clock className="w-3 h-3 mr-1" />
                           {session.duration}min
@@ -342,7 +412,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
                       <div>
                         <p className="text-sm font-medium text-orange-800">Pre-care Reminder</p>
                         <p className="text-sm text-orange-700">
-                          {session.preProcedureInstructions[0]}
+                          {session.pre_procedure_instructions[0]}
                         </p>
                         <Button variant="link" className="text-orange-700 p-0 h-auto text-sm">
                           View all instructions
@@ -379,7 +449,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
                   <div className="flex justify-between items-start">
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
-                        <h3 className="font-medium">{session.therapyType}</h3>
+                        <h3 className="font-medium">{session.therapy_type}</h3>
                         <Badge variant={session.status === 'completed' ? 'default' : 'destructive'}>
                           {session.status === 'completed' && <CheckCircle className="w-3 h-3 mr-1" />}
                           {session.status === 'cancelled' && <XCircle className="w-3 h-3 mr-1" />}
@@ -424,7 +494,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
                         <div>
                           <p className="text-sm font-medium text-green-800">Post-care Instructions</p>
                           <p className="text-sm text-green-700">
-                            {session.postProcedureInstructions[0]}
+                            {session.post_procedure_instructions[0]}
                           </p>
                         </div>
                       </div>
@@ -545,7 +615,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
           <div className="space-y-4">
             <div>
               <Label htmlFor="therapy-type">Therapy Type</Label>
-              <Select value={newBooking.therapyType} onValueChange={(value) => setNewBooking({...newBooking, therapyType: value})}>
+              <Select value={newBooking.therapy_type} onValueChange={(value) => setNewBooking({...newBooking, therapy_type: value})}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select therapy type" />
                 </SelectTrigger>

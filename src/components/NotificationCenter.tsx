@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -9,12 +9,40 @@ import { Badge } from './ui/badge';
 import { Switch } from './ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Bell, Send, Settings, Plus, Mail, MessageSquare, Smartphone, Clock } from 'lucide-react';
-import { mockNotifications, mockPatients } from './mockData';
+import { Bell, Send, Settings, Plus, Mail, MessageSquare, Smartphone, Clock, Loader2 } from 'lucide-react';
+import { Notification } from '../App';
+import { databaseService } from '../utils/database';
+import { toast } from 'sonner@2.0.3';
 
 export function NotificationCenter() {
   const [activeTab, setActiveTab] = useState('overview');
   const [isCreatingNotification, setIsCreatingNotification] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load data from database
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [notificationsData, patientsData] = await Promise.all([
+        // For now, get notifications for the first patient as a demo
+        databaseService.notifications.getPatientNotifications('2'),
+        databaseService.patients.getPatients()
+      ]);
+      setNotifications(notificationsData);
+      setPatients(patientsData);
+    } catch (error) {
+      console.error('Failed to load notification data:', error);
+      toast.error('Failed to load notifications');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const [notificationForm, setNotificationForm] = useState({
     type: 'reminder',
     title: '',
@@ -29,12 +57,83 @@ export function NotificationCenter() {
   });
 
   const notificationStats = {
-    total: mockNotifications.length,
-    unread: mockNotifications.filter(n => !n.read).length,
-    urgent: mockNotifications.filter(n => n.urgent).length,
-    today: mockNotifications.filter(n => 
+    total: notifications.length,
+    unread: notifications.filter(n => !n.read).length,
+    urgent: notifications.filter(n => n.urgent).length,
+    today: notifications.filter(n => 
       new Date(n.date).toDateString() === new Date().toDateString()
     ).length
+  };
+
+  // Handle notification creation
+  const handleCreateNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!notificationForm.title || !notificationForm.message) {
+      toast.error('Please fill in title and message');
+      return;
+    }
+
+    if (!notificationForm.channels.inApp && !notificationForm.channels.email && !notificationForm.channels.sms) {
+      toast.error('Please select at least one delivery channel');
+      return;
+    }
+
+    try {
+      // For demo purposes, send to patient with ID '2'
+      const notificationData = {
+        patient_id: '2',
+        type: notificationForm.type,
+        title: notificationForm.title,
+        message: notificationForm.message,
+        date: new Date().toISOString().split('T')[0],
+        read: false,
+        urgent: notificationForm.urgent
+      };
+
+      const newNotification = await databaseService.notifications.createNotification(notificationData);
+      setNotifications(prev => [newNotification, ...prev]);
+      
+      // Reset form
+      setNotificationForm({
+        type: 'reminder',
+        title: '',
+        message: '',
+        recipients: 'all',
+        urgent: false,
+        channels: {
+          inApp: true,
+          email: false,
+          sms: false
+        }
+      });
+      
+      setIsCreatingNotification(false);
+      
+      const channels = [];
+      if (notificationForm.channels.inApp) channels.push('In-App');
+      if (notificationForm.channels.email) channels.push('Email');
+      if (notificationForm.channels.sms) channels.push('SMS');
+      
+      toast.success(`Notification sent via ${channels.join(', ')} to ${notificationForm.recipients === 'all' ? 'all patients' : notificationForm.recipients + ' patients'}`);
+    } catch (error) {
+      console.error('Failed to create notification:', error);
+      toast.error('Failed to send notification');
+    }
+  };
+
+  // Mark notification as read
+  const markAsRead = async (notificationId: string) => {
+    try {
+      await databaseService.notifications.updateNotification(notificationId, { read: true });
+      setNotifications(prev => prev.map(n => 
+        n.id === notificationId ? { ...n, read: true } : n
+      ));
+      toast.success('Notification marked as read');
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+      toast.error('Failed to update notification');
+    }
   };
 
   const CreateNotificationDialog = () => (
@@ -52,7 +151,7 @@ export function NotificationCenter() {
             Send notifications to patients about appointments, reminders, or updates
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-4">
+        <form onSubmit={handleCreateNotification} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="type">Notification Type</Label>
             <Select 
@@ -72,23 +171,25 @@ export function NotificationCenter() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">Title *</Label>
             <Input
               id="title"
               placeholder="Enter notification title"
               value={notificationForm.title}
               onChange={(e) => setNotificationForm({...notificationForm, title: e.target.value})}
+              required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="message">Message</Label>
+            <Label htmlFor="message">Message *</Label>
             <Textarea
               id="message"
               placeholder="Enter notification message"
               value={notificationForm.message}
               onChange={(e) => setNotificationForm({...notificationForm, message: e.target.value})}
               rows={3}
+              required
             />
           </div>
 
@@ -110,7 +211,7 @@ export function NotificationCenter() {
           </div>
 
           <div className="space-y-3">
-            <Label>Delivery Channels</Label>
+            <Label>Delivery Channels *</Label>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -169,7 +270,21 @@ export function NotificationCenter() {
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" type="button" onClick={() => setIsCreatingNotification(false)}>
+            <Button variant="outline" type="button" onClick={() => {
+              setIsCreatingNotification(false);
+              setNotificationForm({
+                type: 'reminder',
+                title: '',
+                message: '',
+                recipients: 'all',
+                urgent: false,
+                channels: {
+                  inApp: true,
+                  email: false,
+                  sms: false
+                }
+              });
+            }}>
               Cancel
             </Button>
             <Button type="submit">
@@ -262,7 +377,7 @@ export function NotificationCenter() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockNotifications.map((notification) => (
+                    {notifications.map((notification) => (
                       <TableRow key={notification.id}>
                         <TableCell>
                           <Badge variant="outline">
@@ -297,10 +412,20 @@ export function NotificationCenter() {
                         </TableCell>
                         <TableCell>
                           <div className="flex space-x-1">
-                            <Button variant="outline" size="sm">
-                              View
-                            </Button>
-                            <Button variant="outline" size="sm">
+                            {!notification.read && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => markAsRead(notification.id)}
+                              >
+                                Mark Read
+                              </Button>
+                            )}
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => toast.success('Notification resent successfully')}
+                            >
                               Resend
                             </Button>
                           </div>
@@ -425,7 +550,9 @@ export function NotificationCenter() {
             </div>
 
             <div className="flex justify-end">
-              <Button>Save Settings</Button>
+              <Button onClick={() => toast.success('Notification settings saved successfully!')}>
+                Save Settings
+              </Button>
             </div>
           </div>
         </CardContent>

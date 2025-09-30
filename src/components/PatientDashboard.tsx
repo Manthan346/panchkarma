@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
-import { Bell, Calendar, Activity, MessageSquare, LogOut, Clock } from 'lucide-react';
-import { User } from '../App';
-import { mockPatients, mockTherapySessions, mockProgressData, mockNotifications } from './mockData';
+import { Bell, Calendar, Activity, MessageSquare, LogOut, Clock, Loader2 } from 'lucide-react';
+import { User, Patient, TherapySession, ProgressData, Notification } from '../App';
+import { databaseService } from '../utils/database';
 import { PatientProgress } from './PatientProgress';
 import { PatientAppointments } from './PatientAppointments';
 import { PatientFeedback } from './PatientFeedback';
+import { DemoModeNotice } from './DemoModeNotice';
+import { toast } from 'sonner@2.0.3';
 
 interface PatientDashboardProps {
   user: User;
@@ -18,14 +20,77 @@ interface PatientDashboardProps {
 
 export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [patientData, setPatientData] = useState<Patient | null>(null);
+  const [upcomingSessions, setUpcomingSessions] = useState<TherapySession[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [progressData, setProgressData] = useState<ProgressData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Get patient data (in real app, this would be fetched from API)
-  const patientData = mockPatients.find(p => p.id === user.id);
-  const upcomingSessions = mockTherapySessions.filter(
-    session => session.patientId === user.id && new Date(session.date) >= new Date()
-  );
-  const unreadNotifications = mockNotifications.filter(n => !n.read);
-  const recentProgress = mockProgressData.slice(-1)[0];
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch patient profile
+        const patient = await databaseService.patients.getPatient(user.id);
+        setPatientData(patient);
+
+        // Fetch therapy sessions
+        const sessions = await databaseService.therapySessions.getPatientTherapySessions(user.id);
+        const upcoming = sessions.filter(
+          (session: TherapySession) => new Date(session.date) >= new Date() && session.status === 'scheduled'
+        ).sort((a: TherapySession, b: TherapySession) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setUpcomingSessions(upcoming);
+
+        // Fetch notifications
+        const patientNotifications = await databaseService.notifications.getPatientNotifications(user.id);
+        setNotifications(patientNotifications);
+
+        // Fetch progress data
+        const progress = await databaseService.progress.getPatientProgress(user.id);
+        setProgressData(progress);
+
+      } catch (error) {
+        console.error('Error fetching patient data:', error);
+        toast.error('Failed to load patient data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPatientData();
+  }, [user.id]);
+
+  const unreadNotifications = notifications.filter(n => !n.read);
+  const recentProgress = progressData.slice(-1)[0];
+  
+  // Get all sessions for completed count, not just upcoming ones
+  const [allSessions, setAllSessions] = useState<TherapySession[]>([]);
+  
+  useEffect(() => {
+    const fetchAllSessions = async () => {
+      try {
+        const sessions = await databaseService.therapySessions.getPatientTherapySessions(user.id);
+        setAllSessions(sessions);
+      } catch (error) {
+        console.error('Error fetching all sessions:', error);
+      }
+    };
+    fetchAllSessions();
+  }, [user.id]);
+  
+  const completedSessions = allSessions.filter(s => s.status === 'completed').length;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -70,6 +135,9 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
+            {/* Demo Mode Notice */}
+            <DemoModeNotice />
+            
             {/* Welcome Card */}
             <Card className="bg-gradient-to-r from-green-50 to-blue-50">
               <CardHeader>
@@ -94,7 +162,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
                         {new Date(upcomingSessions[0].date).toLocaleDateString()}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {upcomingSessions[0].therapyType} at {upcomingSessions[0].time}
+                        {upcomingSessions[0].therapy_type} at {upcomingSessions[0].time}
                       </p>
                     </div>
                   ) : (
@@ -113,12 +181,12 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {mockTherapySessions.filter(s => s.patientId === user.id && s.status === 'completed').length}
+                    {completedSessions}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Sessions completed
                   </p>
-                  <Progress value={65} className="mt-2" />
+                  <Progress value={Math.min((completedSessions / 10) * 100, 100)} className="mt-2" />
                 </CardContent>
               </Card>
 
@@ -129,7 +197,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {recentProgress ? recentProgress.energyLevel : 'N/A'}/10
+                    {recentProgress ? recentProgress.energy_level : 'N/A'}/10
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Latest energy level
@@ -152,7 +220,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
                     {upcomingSessions.slice(0, 3).map((session) => (
                       <div key={session.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
-                          <p className="font-medium">{session.therapyType}</p>
+                          <p className="font-medium">{session.therapy_type}</p>
                           <p className="text-sm text-muted-foreground">
                             {new Date(session.date).toLocaleDateString()} at {session.time}
                           </p>
@@ -186,7 +254,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {mockNotifications.slice(0, 3).map((notification) => (
+                    {notifications.slice(0, 3).map((notification) => (
                       <div key={notification.id} className="flex items-start space-x-3 p-3 border rounded-lg">
                         <div className={`w-2 h-2 rounded-full mt-2 ${
                           notification.urgent ? 'bg-destructive' : 'bg-primary'
@@ -214,7 +282,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
                 <CardHeader>
                   <CardTitle>Next Session Care Instructions</CardTitle>
                   <CardDescription>
-                    Important guidelines for your upcoming {upcomingSessions[0].therapyType} session
+                    Important guidelines for your upcoming {upcomingSessions[0].therapy_type} session
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -222,7 +290,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
                     <div>
                       <h4 className="font-medium mb-3 text-orange-700">Before Your Treatment</h4>
                       <ul className="space-y-2">
-                        {upcomingSessions[0].preProcedureInstructions.map((instruction, index) => (
+                        {upcomingSessions[0].pre_procedure_instructions.map((instruction, index) => (
                           <li key={index} className="text-sm flex items-start">
                             <span className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-2 flex-shrink-0" />
                             {instruction}
@@ -233,7 +301,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
                     <div>
                       <h4 className="font-medium mb-3 text-green-700">After Your Treatment</h4>
                       <ul className="space-y-2">
-                        {upcomingSessions[0].postProcedureInstructions.map((instruction, index) => (
+                        {upcomingSessions[0].post_procedure_instructions.map((instruction, index) => (
                           <li key={index} className="text-sm flex items-start">
                             <span className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-2 flex-shrink-0" />
                             {instruction}

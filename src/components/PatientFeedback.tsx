@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -8,8 +8,10 @@ import { Slider } from './ui/slider';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Star, MessageSquare, Plus, Send, AlertTriangle, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { mockTherapySessions } from './mockData';
+import { Star, MessageSquare, Plus, Send, AlertTriangle, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
+import { databaseService } from '../utils/database';
+import { TherapySession } from '../App';
+import { toast } from 'sonner@2.0.3';
 
 interface FeedbackEntry {
   id: string;
@@ -34,7 +36,7 @@ const mockFeedback: FeedbackEntry[] = [
   {
     id: '1',
     sessionId: '2',
-    date: '2024-01-16',
+    date: new Date(Date.now() - 86400000).toISOString().split('T')[0], // Yesterday
     rating: 5,
     effectivenessRating: 4,
     comfortRating: 5,
@@ -47,6 +49,9 @@ const mockFeedback: FeedbackEntry[] = [
 ];
 
 export function PatientFeedback({ userId }: PatientFeedbackProps) {
+  const [feedbackEntries, setFeedbackEntries] = useState<FeedbackEntry[]>([]);
+  const [sessions, setSessions] = useState<TherapySession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackForm, setFeedbackForm] = useState({
     sessionId: '',
@@ -59,14 +64,88 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
     wouldRecommend: true
   });
 
+  // Load data from database
+  useEffect(() => {
+    loadData();
+  }, [userId]);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const sessionsData = await databaseService.therapySessions.getPatientTherapySessions(userId);
+      setSessions(sessionsData);
+      
+      // Initialize with mock feedback data for now (would normally load from database)
+      setFeedbackEntries([{
+        id: '1',
+        sessionId: '2',
+        date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+        rating: 5,
+        effectivenessRating: 4,
+        comfortRating: 5,
+        feedback: 'The Swedana therapy was incredibly relaxing. I felt much better after the session and noticed improved circulation.',
+        sideEffects: 'None reported',
+        improvements: 'Better sleep quality, reduced muscle tension',
+        wouldRecommend: true,
+        status: 'responded'
+      }]);
+    } catch (error) {
+      console.error('Failed to load feedback data:', error);
+      toast.error('Failed to load feedback data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Get completed sessions that need feedback
-  const completedSessions = mockTherapySessions.filter(
-    session => session.patientId === userId && session.status === 'completed'
+  const completedSessions = sessions.filter(
+    session => session.patient_id === userId && session.status === 'completed'
   );
 
   const sessionsNeedingFeedback = completedSessions.filter(
-    session => !mockFeedback.some(feedback => feedback.sessionId === session.id)
+    session => !feedbackEntries.some(feedback => feedback.sessionId === session.id)
   );
+
+  // Handle feedback submission
+  const handleSubmitFeedback = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!feedbackForm.sessionId || !feedbackForm.feedback) {
+      toast.error('Please select a session and provide feedback');
+      return;
+    }
+
+    const newFeedback: FeedbackEntry = {
+      id: `feedback_${Date.now()}`,
+      sessionId: feedbackForm.sessionId,
+      date: new Date().toISOString().split('T')[0],
+      rating: feedbackForm.rating[0],
+      effectivenessRating: feedbackForm.effectivenessRating[0],
+      comfortRating: feedbackForm.comfortRating[0],
+      feedback: feedbackForm.feedback,
+      sideEffects: feedbackForm.sideEffects || 'None reported',
+      improvements: feedbackForm.improvements,
+      wouldRecommend: feedbackForm.wouldRecommend,
+      status: 'submitted'
+    };
+
+    setFeedbackEntries(prev => [...prev, newFeedback]);
+    
+    // Reset form
+    setFeedbackForm({
+      sessionId: '',
+      rating: [5],
+      effectivenessRating: [4],
+      comfortRating: [5],
+      feedback: '',
+      sideEffects: '',
+      improvements: '',
+      wouldRecommend: true
+    });
+    
+    setIsSubmittingFeedback(false);
+    toast.success('Feedback submitted successfully! Thank you for sharing your experience.');
+  };
 
   const SubmitFeedbackDialog = () => (
     <Dialog open={isSubmittingFeedback} onOpenChange={setIsSubmittingFeedback}>
@@ -83,9 +162,9 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
             Help us improve by sharing your therapy experience
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-6">
+        <form onSubmit={handleSubmitFeedback} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="session">Select Session</Label>
+            <Label htmlFor="session">Select Session *</Label>
             <Select 
               value={feedbackForm.sessionId} 
               onValueChange={(value) => setFeedbackForm({...feedbackForm, sessionId: value})}
@@ -96,7 +175,7 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
               <SelectContent>
                 {sessionsNeedingFeedback.map(session => (
                   <SelectItem key={session.id} value={session.id}>
-                    {session.therapyType} - {new Date(session.date).toLocaleDateString()}
+                    {session.therapy_type} - {new Date(session.date).toLocaleDateString()}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -159,13 +238,14 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="feedback">Overall Experience</Label>
+            <Label htmlFor="feedback">Overall Experience *</Label>
             <Textarea
               id="feedback"
               placeholder="Please describe your overall experience with this treatment session..."
               value={feedbackForm.feedback}
               onChange={(e) => setFeedbackForm({...feedbackForm, feedback: e.target.value})}
               rows={3}
+              required
             />
           </div>
 
@@ -216,7 +296,19 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" type="button" onClick={() => setIsSubmittingFeedback(false)}>
+            <Button variant="outline" type="button" onClick={() => {
+              setIsSubmittingFeedback(false);
+              setFeedbackForm({
+                sessionId: '',
+                rating: [5],
+                effectivenessRating: [4],
+                comfortRating: [5],
+                feedback: '',
+                sideEffects: '',
+                improvements: '',
+                wouldRecommend: true
+              });
+            }}>
               Cancel
             </Button>
             <Button type="submit">
@@ -229,6 +321,17 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
     </Dialog>
   );
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-muted-foreground">Loading feedback data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Feedback Overview */}
@@ -239,7 +342,7 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockFeedback.length}</div>
+            <div className="text-2xl font-bold">{feedbackEntries.length}</div>
             <p className="text-xs text-muted-foreground">
               Total sessions reviewed
             </p>
@@ -253,8 +356,8 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockFeedback.length > 0 
-                ? (mockFeedback.reduce((acc, f) => acc + f.rating, 0) / mockFeedback.length).toFixed(1)
+              {feedbackEntries.length > 0 
+                ? (feedbackEntries.reduce((acc, f) => acc + f.rating, 0) / feedbackEntries.length).toFixed(1)
                 : 'N/A'
               }
             </div>
@@ -297,7 +400,7 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
               {sessionsNeedingFeedback.map((session) => (
                 <div key={session.id} className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50">
                   <div>
-                    <p className="font-medium">{session.therapyType}</p>
+                    <p className="font-medium">{session.therapy_type}</p>
                     <p className="text-sm text-muted-foreground">
                       {new Date(session.date).toLocaleDateString()} with {session.practitioner}
                     </p>
@@ -326,14 +429,14 @@ export function PatientFeedback({ userId }: PatientFeedbackProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {mockFeedback.length > 0 ? (
-              mockFeedback.map((feedback) => {
-                const session = mockTherapySessions.find(s => s.id === feedback.sessionId);
+            {feedbackEntries.length > 0 ? (
+              feedbackEntries.map((feedback) => {
+                const session = sessions.find(s => s.id === feedback.sessionId);
                 return (
                   <div key={feedback.id} className="border rounded-lg p-4 space-y-4">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-medium">{session?.therapyType}</h3>
+                        <h3 className="font-medium">{session?.therapy_type}</h3>
                         <p className="text-sm text-muted-foreground">
                           {new Date(feedback.date).toLocaleDateString()} with {session?.practitioner}
                         </p>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -9,59 +9,54 @@ import { Badge } from './ui/badge';
 import { Calendar } from './ui/calendar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Plus, Clock, User, Calendar as CalendarIcon, Edit, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
-import { mockPatients, therapyTypes, practitioners } from './mockData';
+import { Plus, Clock, User, Calendar as CalendarIcon, Edit, Trash2, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { TherapySession } from '../App';
+import { databaseService } from '../utils/database';
 import { toast } from 'sonner@2.0.3';
 
 export function TherapyScheduling() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isSchedulingNew, setIsSchedulingNew] = useState(false);
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'list'
-  const [sessions, setSessions] = useState<TherapySession[]>([
-    {
-      id: '1',
-      patientId: '2',
-      therapyType: 'Abhyanga (Oil Massage)',
-      date: new Date().toISOString().split('T')[0],
-      time: '09:00',
-      duration: 60,
-      status: 'scheduled',
-      practitioner: 'Dr. Sharma',
-      preProcedureInstructions: [
-        'Fast for 2 hours before treatment',
-        'Avoid cold drinks',
-        'Wear comfortable clothing',
-        'Arrive 15 minutes early'
-      ],
-      postProcedureInstructions: [
-        'Rest for 30 minutes after treatment',
-        'Drink warm water',
-        'Avoid cold exposure for 2 hours',
-        'Take prescribed herbal medicine'
-      ]
-    },
-    {
-      id: '2',
-      patientId: '3',
-      therapyType: 'Swedana (Steam Therapy)',
-      date: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow
-      time: '10:00',
-      duration: 45,
-      status: 'scheduled',
-      practitioner: 'Dr. Patel',
-      preProcedureInstructions: [
-        'Light breakfast only',
-        'Remove all jewelry',
-        'Inform about any discomfort'
-      ],
-      postProcedureInstructions: [
-        'Cool down gradually',
-        'Drink plenty of water',
-        'Rest for 1 hour'
-      ]
+  const [sessions, setSessions] = useState<TherapySession[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [therapyTypes, setTherapyTypes] = useState<any[]>([]);
+  const [practitioners, setPractitioners] = useState<string[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load data from database
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [sessionsData, patientsData, therapyTypesData, doctorsData, practitionersData] = await Promise.all([
+        databaseService.therapySessions.getTherapySessions(),
+        databaseService.patients.getPatients(),
+        databaseService.referenceData.getTherapyTypes(),
+        databaseService.doctors.getDoctors(),
+        databaseService.referenceData.getPractitioners()
+      ]);
+
+      setSessions(sessionsData);
+      setPatients(patientsData);
+      setTherapyTypes(therapyTypesData);
+      setDoctors(doctorsData);
+      
+      // Combine doctor names with legacy practitioners
+      const doctorNames = doctorsData.map(d => d.name);
+      const allPractitioners = [...new Set([...doctorNames, ...practitionersData])];
+      setPractitioners(allPractitioners);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+      toast.error('Failed to load scheduling data');
+    } finally {
+      setIsLoading(false);
     }
-  ]);
+  };
 
   const [scheduleForm, setScheduleForm] = useState({
     patientId: '',
@@ -70,6 +65,7 @@ export function TherapyScheduling() {
     time: '',
     duration: 60,
     practitioner: '',
+    doctorId: '',
     notes: ''
   });
 
@@ -91,11 +87,12 @@ export function TherapyScheduling() {
       time: '',
       duration: 60,
       practitioner: '',
+      doctorId: '',
       notes: ''
     });
   };
 
-  const handleScheduleSubmit = (e: React.FormEvent) => {
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate form
@@ -105,49 +102,68 @@ export function TherapyScheduling() {
       return;
     }
 
-    // Create new session
-    const newSession: TherapySession = {
-      id: `session_${Date.now()}`,
-      patientId: scheduleForm.patientId,
-      therapyType: scheduleForm.therapyType,
-      date: scheduleForm.date,
-      time: scheduleForm.time,
-      duration: scheduleForm.duration,
-      status: 'scheduled',
-      practitioner: scheduleForm.practitioner,
-      notes: scheduleForm.notes,
-      preProcedureInstructions: getDefaultPreInstructions(scheduleForm.therapyType),
-      postProcedureInstructions: getDefaultPostInstructions(scheduleForm.therapyType)
-    };
+    try {
+      // Create new session in database
+      const sessionData = {
+        patient_id: scheduleForm.patientId,
+        therapy_type: scheduleForm.therapyType,
+        date: scheduleForm.date,
+        time: scheduleForm.time,
+        duration: scheduleForm.duration,
+        status: 'scheduled',
+        practitioner: scheduleForm.practitioner,
+        doctor_id: scheduleForm.doctorId || undefined,
+        notes: scheduleForm.notes,
+        pre_procedure_instructions: getDefaultPreInstructions(scheduleForm.therapyType),
+        post_procedure_instructions: getDefaultPostInstructions(scheduleForm.therapyType)
+      };
 
-    // Add to sessions
-    setSessions(prev => [...prev, newSession]);
-    
-    // Show success message
-    const patient = mockPatients.find(p => p.id === scheduleForm.patientId);
-    toast.success(`Session scheduled successfully for ${patient?.name} on ${scheduleForm.date} at ${scheduleForm.time}`);
-    
-    // Reset form and close dialog
-    resetForm();
-    setIsSchedulingNew(false);
+      const newSession = await databaseService.therapySessions.createTherapySession(sessionData);
+
+      // Add to sessions
+      setSessions(prev => [...prev, newSession]);
+      
+      // Show success message
+      const patient = patients.find(p => p.id === scheduleForm.patientId);
+      toast.success(`Session scheduled successfully for ${patient?.name} on ${scheduleForm.date} at ${scheduleForm.time}`);
+      
+      // Reset form and close dialog
+      resetForm();
+      setIsSchedulingNew(false);
+    } catch (error) {
+      console.error('Failed to schedule session:', error);
+      toast.error('Failed to schedule session');
+    }
   };
 
-  const handleCancelSession = (sessionId: string) => {
-    setSessions(prev => prev.map(session => 
-      session.id === sessionId 
-        ? { ...session, status: 'cancelled' as const }
-        : session
-    ));
-    toast.success('Session cancelled successfully');
+  const handleCancelSession = async (sessionId: string) => {
+    try {
+      await databaseService.therapySessions.updateTherapySession(sessionId, { status: 'cancelled' });
+      setSessions(prev => prev.map(session => 
+        session.id === sessionId 
+          ? { ...session, status: 'cancelled' as const }
+          : session
+      ));
+      toast.success('Session cancelled successfully');
+    } catch (error) {
+      console.error('Failed to cancel session:', error);
+      toast.error('Failed to cancel session');
+    }
   };
 
-  const handleCompleteSession = (sessionId: string) => {
-    setSessions(prev => prev.map(session => 
-      session.id === sessionId 
-        ? { ...session, status: 'completed' as const }
-        : session
-    ));
-    toast.success('Session marked as completed');
+  const handleCompleteSession = async (sessionId: string) => {
+    try {
+      await databaseService.therapySessions.updateTherapySession(sessionId, { status: 'completed' });
+      setSessions(prev => prev.map(session => 
+        session.id === sessionId 
+          ? { ...session, status: 'completed' as const }
+          : session
+      ));
+      toast.success('Session marked as completed');
+    } catch (error) {
+      console.error('Failed to complete session:', error);
+      toast.error('Failed to complete session');
+    }
   };
 
   const getDefaultPreInstructions = (therapyType: string): string[] => {
@@ -199,7 +215,7 @@ export function TherapyScheduling() {
                 <SelectValue placeholder="Select a patient" />
               </SelectTrigger>
               <SelectContent>
-                {mockPatients.map(patient => (
+                {patients.map(patient => (
                   <SelectItem key={patient.id} value={patient.id}>
                     {patient.name} ({patient.email})
                   </SelectItem>
@@ -254,17 +270,30 @@ export function TherapyScheduling() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="practitioner">Practitioner *</Label>
-            <Select value={scheduleForm.practitioner} onValueChange={(value) => 
-              setScheduleForm({...scheduleForm, practitioner: value})
-            }>
+            <Label htmlFor="practitioner">Doctor/Practitioner *</Label>
+            <Select value={scheduleForm.practitioner} onValueChange={(value) => {
+              // Check if this is a doctor (has ID in doctors array)
+              const selectedDoctor = doctors.find(d => d.name === value);
+              setScheduleForm({
+                ...scheduleForm, 
+                practitioner: value,
+                doctorId: selectedDoctor?.id || ''
+              });
+            }}>
               <SelectTrigger>
-                <SelectValue placeholder="Select practitioner" />
+                <SelectValue placeholder="Select doctor/practitioner" />
               </SelectTrigger>
               <SelectContent>
-                {practitioners.map(practitioner => (
+                {/* Show doctors first */}
+                {doctors.map(doctor => (
+                  <SelectItem key={doctor.id} value={doctor.name}>
+                    {doctor.name} (Doctor - {doctor.specialization})
+                  </SelectItem>
+                ))}
+                {/* Show other practitioners */}
+                {practitioners.filter(p => !doctors.some(d => d.name === p)).map(practitioner => (
                   <SelectItem key={practitioner} value={practitioner}>
-                    {practitioner}
+                    {practitioner} (Practitioner)
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -363,7 +392,7 @@ export function TherapyScheduling() {
                   <div className="space-y-2">
                     {getSessionsForDate(selectedDate).length > 0 ? (
                       getSessionsForDate(selectedDate).map((session) => {
-                        const patient = mockPatients.find(p => p.id === session.patientId);
+                        const patient = patients.find(p => p.id === session.patient_id);
                         return (
                           <div key={session.id} className="p-3 border rounded-lg space-y-2">
                             <div className="flex items-center justify-between">
@@ -379,13 +408,13 @@ export function TherapyScheduling() {
                               </Badge>
                             </div>
                             <div>
-                              <p className="font-medium text-sm">{session.therapyType}</p>
+                              <p className="font-medium text-sm">{session.therapy_type}</p>
                               <p className="text-xs text-muted-foreground">
                                 <User className="w-3 h-3 inline mr-1" />
                                 {patient?.name}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Practitioner: {session.practitioner}
+                                {session.doctor_id ? '🩺 Doctor: ' : 'Practitioner: '}{session.practitioner}
                               </p>
                             </div>
                             <div className="flex space-x-1">
@@ -457,7 +486,7 @@ export function TherapyScheduling() {
                   </TableHeader>
                   <TableBody>
                     {upcomingSessions.map((session) => {
-                      const patient = mockPatients.find(p => p.id === session.patientId);
+                      const patient = patients.find(p => p.id === session.patient_id);
                       return (
                         <TableRow key={session.id}>
                           <TableCell>
@@ -474,7 +503,7 @@ export function TherapyScheduling() {
                               <p className="text-sm text-muted-foreground">{patient?.email}</p>
                             </div>
                           </TableCell>
-                          <TableCell>{session.therapyType}</TableCell>
+                          <TableCell>{session.therapy_type}</TableCell>
                           <TableCell>{session.practitioner}</TableCell>
                           <TableCell>
                             <Badge variant="outline">
