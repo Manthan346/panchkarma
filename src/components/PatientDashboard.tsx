@@ -10,7 +10,7 @@ import { databaseService } from '../utils/database';
 import { PatientProgress } from './PatientProgress';
 import { PatientAppointments } from './PatientAppointments';
 import { PatientFeedback } from './PatientFeedback';
-import { DemoModeNotice } from './DemoModeNotice';
+
 import { toast } from 'sonner@2.0.3';
 
 interface PatientDashboardProps {
