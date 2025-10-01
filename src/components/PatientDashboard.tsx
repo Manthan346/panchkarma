@@ -10,7 +10,6 @@ import { databaseService } from '../utils/database';
 import { PatientProgress } from './PatientProgress';
 import { PatientAppointments } from './PatientAppointments';
 import { PatientFeedback } from './PatientFeedback';
-
 import { toast } from 'sonner@2.0.3';
 
 interface PatientDashboardProps {
@@ -135,9 +134,6 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            {/* Demo Mode Notice */}
-           
-            
             {/* Welcome Card */}
             <Card className="bg-gradient-to-r from-green-50 to-blue-50">
               <CardHeader>
