@@ -136,7 +136,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
 
           <TabsContent value="overview" className="space-y-6">
             {/* Demo Mode Notice */}
-            <DemoModeNotice />
+           
             
             {/* Welcome Card */}
             <Card className="bg-gradient-to-r from-green-50 to-blue-50">
