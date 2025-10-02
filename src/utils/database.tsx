@@ -1,9 +1,9 @@
-import { projectId, publicAnonKey } from './supabase/info';
+import { projectId, publicAnonKey, edgeFunctionUrl, forceDemoMode } from './supabase/info';
 
-const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-a3cc576e`;
+const API_BASE_URL = edgeFunctionUrl;
 
 // Check if we should use fallback mode from the start
-const FORCE_DEMO_MODE = !projectId || !publicAnonKey || projectId === 'demo';
+const FORCE_DEMO_MODE = forceDemoMode || !projectId || !publicAnonKey || projectId === 'demo';
 
 // Fallback demo data
 const fallbackUsers = [

@@ -11,6 +11,7 @@ import { DoctorManagement } from './DoctorManagement';
 import { TherapyScheduling } from './TherapyScheduling';
 import { AdminAnalytics } from './AdminAnalytics';
 import { NotificationCenter } from './NotificationCenter';
+import { DiagnosticPanel } from './DiagnosticPanel';
 import { toast } from 'sonner@2.0.3';
 import type { Doctor } from '../App';
 
@@ -267,6 +268,9 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
           <TabsContent value="settings" className="space-y-6">
             <div className="space-y-6">
+              {/* Diagnostic Panel */}
+              <DiagnosticPanel />
+              
               <Card>
                 <CardHeader>
                   <CardTitle>System Information</CardTitle>
@@ -299,9 +303,9 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       📚 For deployment instructions and troubleshooting, please refer to:
                     </p>
                     <ul className="text-sm space-y-1 ml-4">
+                      <li>• <code className="bg-muted px-1 py-0.5 rounded">SUPABASE_SETUP.md</code> - Supabase connection guide</li>
                       <li>• <code className="bg-muted px-1 py-0.5 rounded">DEPLOYMENT.md</code> - Full deployment guide</li>
                       <li>• <code className="bg-muted px-1 py-0.5 rounded">QUICK_START.md</code> - Quick start guide</li>
-                      <li>• <code className="bg-muted px-1 py-0.5 rounded">FIXES_APPLIED.md</code> - Technical details</li>
                     </ul>
                   </div>
                 </CardContent>

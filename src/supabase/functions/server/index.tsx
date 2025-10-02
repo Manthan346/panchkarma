@@ -6,12 +6,31 @@ import * as kv from './kv_store.tsx';
 
 const app = new Hono();
 
-// Middleware
+// Enhanced CORS configuration
 app.use('*', cors({
   origin: '*',
-  allowHeaders: ['*'],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  exposeHeaders: ['Content-Length', 'X-JSON'],
+  maxAge: 600,
+  credentials: true,
 }));
+
+// Additional CORS headers middleware
+app.use('*', async (c, next) => {
+  c.header('Access-Control-Allow-Origin', '*');
+  c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  c.header('Access-Control-Max-Age', '600');
+  
+  // Handle OPTIONS preflight requests
+  if (c.req.method === 'OPTIONS') {
+    return c.text('', 204);
+  }
+  
+  await next();
+});
+
 app.use('*', logger(console.log));
 
 // Supabase client
