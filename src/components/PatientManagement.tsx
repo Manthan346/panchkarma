@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Plus, Search, Eye, Edit, Phone, Mail, MapPin, Loader2 } from 'lucide-react';
 import { Patient } from '../App';
-import { databaseService } from '../utils/database';
+import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
 
 interface PatientManagementProps {
@@ -54,6 +54,7 @@ export function PatientManagement({ patients: externalPatients, setPatients: ext
   const [newPatient, setNewPatient] = useState({
     name: '',
     email: '',
+    password: '',
     age: '',
     phone: '',
     address: '',
@@ -62,6 +63,7 @@ export function PatientManagement({ patients: externalPatients, setPatients: ext
   const [editPatient, setEditPatient] = useState({
     name: '',
     email: '',
+    password: '',
     age: '',
     phone: '',
     address: '',
@@ -115,6 +117,7 @@ export function PatientManagement({ patients: externalPatients, setPatients: ext
     setEditPatient({
       name: patient.name,
       email: patient.email,
+      password: '', // Don't show existing password
       age: patient.age.toString(),
       phone: patient.phone,
       address: patient.address,
@@ -128,7 +131,7 @@ export function PatientManagement({ patients: externalPatients, setPatients: ext
     e.preventDefault();
     
     // Validate form
-    if (!newPatient.name || !newPatient.email || !newPatient.age || !newPatient.phone) {
+    if (!newPatient.name || !newPatient.email || !newPatient.password || !newPatient.age || !newPatient.phone) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -144,7 +147,7 @@ export function PatientManagement({ patients: externalPatients, setPatients: ext
       const patientData = {
         name: newPatient.name,
         email: newPatient.email,
-        password: 'temp123', // Default password
+        password: newPatient.password,
         age: parseInt(newPatient.age),
         phone: newPatient.phone,
         address: newPatient.address,
@@ -160,6 +163,7 @@ export function PatientManagement({ patients: externalPatients, setPatients: ext
       setNewPatient({
         name: '',
         email: '',
+        password: '',
         age: '',
         phone: '',
         address: '',

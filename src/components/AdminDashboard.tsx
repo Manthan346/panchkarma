@@ -3,15 +3,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
-import { Calendar, Users, Clock, Bell, LogOut, Plus, Settings, Loader2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { Calendar, Users, Clock, Bell, LogOut, Plus, Settings, Loader2, MoreHorizontal } from 'lucide-react';
 import { User, Patient, TherapySession } from '../App';
-import { databaseService } from '../utils/database';
-import { PatientManagement } from './PatientManagement';
-import { DoctorManagement } from './DoctorManagement';
+import { databaseService } from '../utils/database-smart';
+import { PatientManagementEnhanced } from './PatientManagementEnhanced';
+import { DoctorManagementEnhanced } from './DoctorManagementEnhanced';
 import { TherapyScheduling } from './TherapyScheduling';
 import { AdminAnalytics } from './AdminAnalytics';
 import { NotificationCenter } from './NotificationCenter';
 import { DiagnosticPanel } from './DiagnosticPanel';
+import { FeedbackManagement } from './FeedbackManagement';
+import { Navbar } from './Navbar';
 import { toast } from 'sonner@2.0.3';
 import type { Doctor } from '../App';
 
@@ -27,23 +30,28 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [sessions, setSessions] = useState<TherapySession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Function to refresh data
+  const refreshData = async () => {
+    try {
+      const [patientsData, doctorsData, sessionsData] = await Promise.all([
+        databaseService.patients.getPatients(),
+        databaseService.doctors.getDoctors(),
+        databaseService.therapySessions.getTherapySessions()
+      ]);
+      
+      setPatients(patientsData);
+      setDoctors(doctorsData);
+      setSessions(sessionsData);
+    } catch (error) {
+      console.error('Error refreshing admin data:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
         setIsLoading(true);
-        
-        // Fetch patients
-        const patientsData = await databaseService.patients.getPatients();
-        setPatients(patientsData);
-
-        // Fetch doctors
-        const doctorsData = await databaseService.doctors.getDoctors();
-        setDoctors(doctorsData);
-
-        // Fetch therapy sessions
-        const sessionsData = await databaseService.therapySessions.getTherapySessions();
-        setSessions(sessionsData);
-
+        await refreshData();
       } catch (error) {
         console.error('Error fetching admin data:', error);
         toast.error('Failed to load admin dashboard data');
@@ -89,40 +97,67 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-semibold text-green-700">
-                🌿 Panchakarma Admin
-              </h1>
-              <Badge variant="secondary">Administrator</Badge>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-muted-foreground">
-                Welcome, {user.name}
-              </span>
-              <Button variant="outline" size="sm" onClick={onLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
+      <Navbar 
+        user={user} 
+        onLogout={onLogout} 
+        title="Panchakarma Admin Dashboard"
+        showNotifications={true}
+        unreadCount={3}
+        onNotificationClick={() => setActiveTab('notifications')}
+      />
+
+      <div className="container mx-auto px-4 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <div className="overflow-x-auto mb-8">
+            <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 min-w-[300px] sm:min-w-[800px] lg:min-w-0">
+              <TabsTrigger value="overview" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Overview</span>
+                <span className="sm:hidden">Home</span>
+              </TabsTrigger>
+              <TabsTrigger value="patients" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Patients</span>
+                <span className="sm:hidden">👥</span>
+              </TabsTrigger>
+              <TabsTrigger value="doctors" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Doctors</span>
+                <span className="sm:hidden">👨‍⚕️</span>
+              </TabsTrigger>
+              <TabsTrigger value="scheduling" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Schedule</span>
+                <span className="sm:hidden">📅</span>
+              </TabsTrigger>
+              <TabsTrigger value="feedback" className="text-xs sm:text-sm hidden sm:block">Feedback</TabsTrigger>
+              <TabsTrigger value="analytics" className="text-xs sm:text-sm hidden sm:block">Analytics</TabsTrigger>
+              <TabsTrigger value="notifications" className="text-xs sm:text-sm hidden sm:block">Notify</TabsTrigger>
+              <TabsTrigger value="settings" className="text-xs sm:text-sm hidden sm:block">Settings</TabsTrigger>
+            </TabsList>
+            
+            {/* Mobile More Options */}
+            <div className="sm:hidden flex justify-center mt-4">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <MoreHorizontal className="w-4 h-4 mr-2" />
+                    More Options
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => setActiveTab('feedback')}>
+                    💬 Feedback
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveTab('analytics')}>
+                    📊 Analytics
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveTab('notifications')}>
+                    🔔 Notifications
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveTab('settings')}>
+                    ⚙️ Settings
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="patients">Patients</TabsTrigger>
-            <TabsTrigger value="doctors">Doctors</TabsTrigger>
-            <TabsTrigger value="scheduling">Scheduling</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
             {/* Stats Cards */}
@@ -247,15 +282,19 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           </TabsContent>
 
           <TabsContent value="patients">
-            <PatientManagement patients={patients} setPatients={setPatients} />
+            <PatientManagementEnhanced patients={patients} setPatients={setPatients} />
           </TabsContent>
 
           <TabsContent value="doctors">
-            <DoctorManagement doctors={doctors} setDoctors={setDoctors} />
+            <DoctorManagementEnhanced doctors={doctors} setDoctors={setDoctors} />
           </TabsContent>
 
           <TabsContent value="scheduling">
-            <TherapyScheduling />
+            <TherapyScheduling doctors={doctors} />
+          </TabsContent>
+
+          <TabsContent value="feedback">
+            <FeedbackManagement userRole="admin" userName={user.name} userId={user.id} />
           </TabsContent>
 
           <TabsContent value="analytics">

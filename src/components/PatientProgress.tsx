@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Plus, TrendingUp, Activity, Heart, Moon, Smile, Loader2 } from 'lucide-react';
 import { ProgressData } from '../App';
-import { databaseService } from '../utils/database';
+import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
 
 interface PatientProgressProps {
@@ -54,11 +54,11 @@ export function PatientProgress({ userId }: PatientProgressProps) {
   
   const trends = {
     symptom: latestProgress && previousProgress ? 
-      ((previousProgress.symptomScore - latestProgress.symptomScore) > 0 ? 'improving' : 'declining') : 'stable',
+      ((previousProgress.symptom_score - latestProgress.symptom_score) > 0 ? 'improving' : 'declining') : 'stable',
     energy: latestProgress && previousProgress ? 
-      ((latestProgress.energyLevel - previousProgress.energyLevel) > 0 ? 'improving' : 'declining') : 'stable',
+      ((latestProgress.energy_level - previousProgress.energy_level) > 0 ? 'improving' : 'declining') : 'stable',
     sleep: latestProgress && previousProgress ? 
-      ((latestProgress.sleepQuality - previousProgress.sleepQuality) > 0 ? 'improving' : 'declining') : 'stable'
+      ((latestProgress.sleep_quality - previousProgress.sleep_quality) > 0 ? 'improving' : 'declining') : 'stable'
   };
 
   // Handle adding new progress entry
@@ -233,7 +233,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {latestProgress ? latestProgress.symptomScore : 'N/A'}/10
+              {latestProgress ? latestProgress.symptom_score : 'N/A'}/10
             </div>
             <div className="flex items-center text-xs text-muted-foreground">
               <TrendingUp className={`w-3 h-3 mr-1 ${
@@ -244,7 +244,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
                trends.symptom === 'declining' ? 'Needs attention' : 'Stable'}
             </div>
             <Progress 
-              value={latestProgress ? (10 - latestProgress.symptomScore) * 10 : 0} 
+              value={latestProgress ? (10 - latestProgress.symptom_score) * 10 : 0} 
               className="mt-2"
             />
           </CardContent>
@@ -257,7 +257,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {latestProgress ? latestProgress.energyLevel : 'N/A'}/10
+              {latestProgress ? latestProgress.energy_level : 'N/A'}/10
             </div>
             <div className="flex items-center text-xs text-muted-foreground">
               <TrendingUp className={`w-3 h-3 mr-1 ${
@@ -268,7 +268,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
                trends.energy === 'declining' ? 'Decreasing' : 'Stable'}
             </div>
             <Progress 
-              value={latestProgress ? latestProgress.energyLevel * 10 : 0} 
+              value={latestProgress ? latestProgress.energy_level * 10 : 0} 
               className="mt-2"
             />
           </CardContent>
@@ -281,7 +281,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {latestProgress ? latestProgress.sleepQuality : 'N/A'}/10
+              {latestProgress ? latestProgress.sleep_quality : 'N/A'}/10
             </div>
             <div className="flex items-center text-xs text-muted-foreground">
               <TrendingUp className={`w-3 h-3 mr-1 ${
@@ -292,7 +292,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
                trends.sleep === 'declining' ? 'Declining' : 'Stable'}
             </div>
             <Progress 
-              value={latestProgress ? latestProgress.sleepQuality * 10 : 0} 
+              value={latestProgress ? latestProgress.sleep_quality * 10 : 0} 
               className="mt-2"
             />
           </CardContent>
@@ -323,21 +323,21 @@ export function PatientProgress({ userId }: PatientProgressProps) {
                 <Legend />
                 <Line
                   type="monotone"
-                  dataKey="symptomScore"
+                  dataKey="symptom_score"
                   stroke="#ff7c7c"
                   strokeWidth={2}
                   name="Symptom Level"
                 />
                 <Line
                   type="monotone"
-                  dataKey="energyLevel"
+                  dataKey="energy_level"
                   stroke="#82ca9d"
                   strokeWidth={2}
                   name="Energy Level"
                 />
                 <Line
                   type="monotone"
-                  dataKey="sleepQuality"
+                  dataKey="sleep_quality"
                   stroke="#8884d8"
                   strokeWidth={2}
                   name="Sleep Quality"
@@ -363,7 +363,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
                 <Tooltip />
                 <Area
                   type="monotone"
-                  dataKey="energyLevel"
+                  dataKey="energy_level"
                   stackId="1"
                   stroke="#82ca9d"
                   fill="#82ca9d"
@@ -371,7 +371,7 @@ export function PatientProgress({ userId }: PatientProgressProps) {
                 />
                 <Area
                   type="monotone"
-                  dataKey="sleepQuality"
+                  dataKey="sleep_quality"
                   stackId="2"
                   stroke="#8884d8"
                   fill="#8884d8"
@@ -401,15 +401,15 @@ export function PatientProgress({ userId }: PatientProgressProps) {
                     <div className="flex space-x-4 mt-2">
                       <div className="flex items-center space-x-1">
                         <Heart className="w-4 h-4 text-red-500" />
-                        <span className="text-sm">Symptoms: {entry.symptomScore}/10</span>
+                        <span className="text-sm">Symptoms: {entry.symptom_score}/10</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <Activity className="w-4 h-4 text-green-500" />
-                        <span className="text-sm">Energy: {entry.energyLevel}/10</span>
+                        <span className="text-sm">Energy: {entry.energy_level}/10</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <Moon className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm">Sleep: {entry.sleepQuality}/10</span>
+                        <span className="text-sm">Sleep: {entry.sleep_quality}/10</span>
                       </div>
                     </div>
                   </div>

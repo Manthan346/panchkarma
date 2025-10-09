@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Plus, Search, Eye, Edit, Phone, Mail, GraduationCap, Briefcase, Loader2 } from 'lucide-react';
 import { Doctor } from '../App';
-import { databaseService } from '../utils/database';
+import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
 
 interface DoctorManagementProps {

@@ -1,153 +1,274 @@
-# Supabase Connection Setup Guide
+# Supabase Setup Guide for Panchakarma Patient Management System
 
-## Your Current Status
-✅ **Supabase credentials are already configured!**
-- Project ID: `zojbxdrvqtnyskpaslri`
-- Anon Key: Already set in `/utils/supabase/info.tsx`
+This guide will help you set up Supabase for your Panchakarma Patient Management System with full authentication, database, and edge functions support.
 
-## Steps to Connect Your Live Website to Supabase
+## 📋 Prerequisites
 
-### 1. Deploy the Edge Function
+1. A Supabase account (sign up at [supabase.com](https://supabase.com))
+2. Your project is already connected via the Figma Make Supabase connection
 
-Run these commands in your terminal (from your project root):
+## 🚀 Quick Setup Steps
 
-```bash
-# Install Supabase CLI if you haven't already
-npm install -g supabase
+### Step 1: Run the Database Schema
 
-# Login to Supabase
-supabase login
+1. Go to your Supabase Dashboard
+2. Navigate to the **SQL Editor**
+3. Copy the contents of `/supabase/schema.sql` file
+4. Paste it into the SQL Editor
+5. Click **Run** to execute the schema
 
-# Link to your Supabase project
-supabase link --project-ref zojbxdrvqtnyskpaslri
+This will create all necessary tables:
+- `profiles` - User profiles
+- `patients` - Patient-specific data
+- `doctors` - Doctor-specific data  
+- `therapy_sessions` - Therapy appointments
+- `progress_data` - Patient progress tracking
+- `notifications` - System notifications
+- `feedback` - Patient feedback
+- `therapy_types` - Reference data
 
-# Deploy the Edge Function
-supabase functions deploy make-server-a3cc576e --project-ref zojbxdrvqtnyskpaslri
+### Step 2: Configure Authentication
+
+1. Go to **Authentication** → **Settings**
+2. Enable **Email Auth**
+3. Optionally configure:
+   - Email templates (Welcome, Password Reset, etc.)
+   - Email rate limiting
+   - Password requirements
+
+### Step 3: Verify Row Level Security (RLS)
+
+The schema automatically enables RLS with these policies:
+
+**Patients:**
+- Can view and update their own data
+- Doctors and admins can view all patients
+
+**Doctors:**
+- Can view and update their own data
+- Everyone can view doctors list
+- Admins can manage doctors
+
+**Therapy Sessions:**
+- Patients can view their own sessions
+- Doctors can view assigned sessions
+- Admins can manage all sessions
+
+**Progress Data:**
+- Patients can manage their own progress
+- Doctors can view all progress
+
+**Feedback:**
+- Patients can create and view their own feedback
+- Doctors can view all feedback and respond
+
+### Step 4: Seed Demo Data (Optional)
+
+To add demo users and data for testing:
+
+1. Go to SQL Editor
+2. Run the following SQL:
+
+```sql
+-- Create demo admin
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+VALUES (
+  gen_random_uuid(),
+  'admin@panchakarma.com',
+  crypt('admin123', gen_salt('bf')),
+  NOW(),
+  NOW(),
+  NOW()
+);
+
+-- Get the admin user ID
+WITH admin AS (
+  SELECT id FROM auth.users WHERE email = 'admin@panchakarma.com'
+)
+INSERT INTO profiles (id, email, full_name, role)
+SELECT id, 'admin@panchakarma.com', 'Dr. Ayurveda Admin', 'admin'
+FROM admin;
+
+-- Create demo doctor
+-- (Repeat similar pattern for doctors and patients)
 ```
 
-### 2. Verify Edge Function Environment Variables
+### Step 5: Update Application
 
-The Edge Function needs three environment variables. Check if they're set:
+Your application is already configured to use Supabase! The system automatically:
 
-```bash
-# List current secrets
-supabase secrets list --project-ref zojbxdrvqtnyskpaslri
+✅ Connects to Supabase when available  
+✅ Falls back to demo mode if Supabase is unavailable  
+✅ Shows connection status on startup  
+✅ Uses Supabase Auth for user authentication  
+✅ Stores all data in Supabase database  
+
+### Step 6: Test the Connection
+
+1. Open your application
+2. You should see: **"✅ Connected to Supabase Database"**
+3. Try signing up a new user
+4. Check your Supabase Dashboard to see the data
+
+## 🔐 Authentication Flow
+
+### Sign Up
+```javascript
+// Users sign up with email/password
+// System automatically creates:
+// 1. Auth user in auth.users
+// 2. Profile in profiles table
+// 3. Role-specific record (patients/doctors table)
 ```
 
-You should see:
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-If any are missing, set them:
-
-```bash
-# Get your keys from https://supabase.com/dashboard/project/zojbxdrvqtnyskpaslri/settings/api
-
-# Set the secrets
-supabase secrets set SUPABASE_URL=https://zojbxdrvqtnyskpaslri.supabase.co --project-ref zojbxdrvqtnyskpaslri
-
-supabase secrets set SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvamJ4ZHJ2cXRueXNrcGFzbHJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkwNjAxNTEsImV4cCI6MjA3NDYzNjE1MX0.ijm8c0TUFei0HKlPTbxaAxxs0Pfvj-Tp2Lu-lCoqgYc --project-ref zojbxdrvqtnyskpaslri
-
-# Get the service role key from Supabase dashboard
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key> --project-ref zojbxdrvqtnyskpaslri
+### Sign In
+```javascript
+// Uses Supabase Auth
+// Returns complete user data with role-specific info
 ```
 
-### 3. Test the Connection
-
-After deployment, test if the Edge Function is working:
-
-```bash
-# Test the API endpoint
-curl https://zojbxdrvqtnyskpaslri.supabase.co/functions/v1/make-server-a3cc576e/users \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvamJ4ZHJ2cXRueXNrcGFzbHJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkwNjAxNTEsImV4cCI6MjA3NDYzNjE1MX0.ijm8c0TUFei0HKlPTbxaAxxs0Pfvj-Tp2Lu-lCoqgYc"
+### Session Management
+```javascript
+// Sessions managed by Supabase
+// Auto-refresh tokens
+// Persistent across page reloads
 ```
 
-If successful, you should see a JSON response with users.
+## 📊 Database Structure
 
-### 4. Verify on Your Live Website
+### Users & Authentication
+- `auth.users` - Supabase managed auth
+- `profiles` - User profiles (admin, doctor, patient)
+- `patients` - Patient-specific data
+- `doctors` - Doctor-specific data
 
-1. Visit your Vercel deployment
-2. Open browser DevTools (F12)
-3. Go to Console tab
-4. You should see:
-   - ✅ `Connected to API` instead of `Demo mode`
-   - ✅ Data being fetched from Supabase
-   - ✅ No 403 errors
+### Clinical Data
+- `therapy_sessions` - Appointments and sessions
+- `progress_data` - Patient health tracking
+- `feedback` - Session feedback and ratings
 
-### 5. Check Edge Function Logs
+### System
+- `notifications` - User notifications
+- `therapy_types` - Reference data for therapies
 
-If something goes wrong:
+## 🛠️ Features Enabled
 
+### Authentication ✅
+- Email/Password authentication
+- Secure password hashing
+- Session management
+- Role-based access control
+
+### Database ✅
+- PostgreSQL with RLS
+- Real-time subscriptions (ready to use)
+- Automatic timestamps
+- Data validation
+
+### Security ✅
+- Row Level Security policies
+- Role-based permissions
+- Secure API access
+- Password encryption
+
+### Edge Functions 🚧
+Ready to add custom edge functions:
 ```bash
-# View real-time logs
-supabase functions logs make-server-a3cc576e --project-ref zojbxdrvqtnyskpaslri
+# Example edge function
+supabase functions new send-notification
 ```
 
-Or view logs in Supabase Dashboard:
-https://supabase.com/dashboard/project/zojbxdrvqtnyskpaslri/functions/make-server-a3cc576e/logs
+## 📱 API Usage
 
-## Troubleshooting Data Not Showing in UI
+### From Your App
+```typescript
+import { databaseService } from './utils/database-smart';
 
-### Check Browser Console
+// Authentication
+await databaseService.auth.signIn(email, password);
+await databaseService.auth.signUp(email, password, userData);
+await databaseService.auth.signOut();
 
-If data is showing in console but not in UI, check for:
+// Data operations
+const patients = await databaseService.patients.getPatients();
+const sessions = await databaseService.therapySessions.getTherapySessions();
+const progress = await databaseService.progress.getPatientProgress(patientId);
+```
 
-1. **Console Output**:
+### Direct Supabase Access
+```typescript
+import { supabase } from './utils/supabase-client';
+
+// Direct queries
+const { data, error } = await supabase
+  .from('patients')
+  .select('*')
+  .eq('id', patientId);
+```
+
+## 🐛 Troubleshooting
+
+### Connection Issues
+- Check your Supabase URL and Anon Key in connection settings
+- Verify network connectivity
+- Check browser console for errors
+
+### RLS Policy Errors
+- Verify user is authenticated
+- Check user role in profiles table
+- Review policy conditions in SQL Editor
+
+### Data Not Showing
+- Verify RLS policies allow access
+- Check user permissions
+- Look for errors in browser console
+
+## 🎯 Next Steps
+
+1. **Add Real-time Features**
+   ```typescript
+   // Subscribe to changes
+   supabase
+     .from('therapy_sessions')
+     .on('*', (payload) => {
+       console.log('Change received!', payload);
+     })
+     .subscribe();
    ```
-   Fetching patients...
-   Patients loaded: 3
-   ```
-   
-2. **React State Issues**: Data might be loading but not triggering re-renders
 
-3. **Conditional Rendering**: Check if components are waiting for loading states
+2. **Add Edge Functions**
+   - Automated notifications
+   - Email sending
+   - PDF report generation
+   - Payment processing
 
-### Common Issues
+3. **Add Storage**
+   - Patient documents
+   - Medical records
+   - Profile pictures
 
-**Issue 1: Data logs in console but UI is empty**
-- **Cause**: Loading states not properly cleared
-- **Fix**: Check `isLoading` state in components
+4. **Add Analytics**
+   - Track usage
+   - Monitor performance
+   - Generate reports
 
-**Issue 2: "Demo mode" toast appears**
-- **Cause**: Edge Function not deployed or not accessible
-- **Fix**: Deploy Edge Function (Step 1 above)
+## 📚 Resources
 
-**Issue 3: 403 Forbidden errors**
-- **Cause**: Edge Function not found or CORS issue
-- **Fix**: Verify deployment and check CORS headers in Edge Function
+- [Supabase Documentation](https://supabase.com/docs)
+- [Row Level Security Guide](https://supabase.com/docs/guides/auth/row-level-security)
+- [Supabase Auth](https://supabase.com/docs/guides/auth)
+- [Edge Functions](https://supabase.com/docs/guides/functions)
 
-## Quick Verification Checklist
+## 💡 Tips
 
-- [ ] Edge Function deployed to Supabase
-- [ ] Environment variables set in Supabase
-- [ ] Test curl command returns data
-- [ ] Browser console shows "Connected to API"
-- [ ] No 403 errors in Network tab
-- [ ] Data appears in UI components
+1. **Development**: Use separate Supabase projects for dev/staging/production
+2. **Backups**: Enable automatic database backups in Supabase dashboard
+3. **Monitoring**: Set up alerts for database usage and errors
+4. **Security**: Regularly review and update RLS policies
+5. **Performance**: Add indexes for frequently queried columns
 
-## Getting Your Service Role Key
+---
 
-1. Go to https://supabase.com/dashboard/project/zojbxdrvqtnyskpaslri/settings/api
-2. Scroll to "Project API keys"
-3. Copy the `service_role` key (NOT the anon key)
-4. Keep this secret - never commit to git!
+🌿 **Your Panchakarma Management System is now powered by Supabase!**
 
-## Alternative: Manual API Testing
-
-You can also test your API using Postman or browser:
-
-**GET Users**:
-```
-GET https://zojbxdrvqtnyskpaslri.supabase.co/functions/v1/make-server-a3cc576e/users
-Headers:
-  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvamJ4ZHJ2cXRueXNrcGFzbHJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkwNjAxNTEsImV4cCI6MjA3NDYzNjE1MX0.ijm8c0TUFei0HKlPTbxaAxxs0Pfvj-Tp2Lu-lCoqgYc
-```
-
-## Need Help?
-
-If you're still having issues:
-
-1. Share the browser console output
-2. Share the Edge Function logs
-3. Share any error messages from deployment
+For questions or issues, check the Supabase dashboard logs and the browser console.

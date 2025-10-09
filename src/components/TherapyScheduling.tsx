@@ -10,11 +10,15 @@ import { Calendar } from './ui/calendar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Plus, Clock, User, Calendar as CalendarIcon, Edit, Trash2, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { TherapySession } from '../App';
-import { databaseService } from '../utils/database';
+import { TherapySession, Doctor } from '../App';
+import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
 
-export function TherapyScheduling() {
+interface TherapySchedulingProps {
+  doctors?: Doctor[];
+}
+
+export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulingProps = {}) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isSchedulingNew, setIsSchedulingNew] = useState(false);
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'list'
@@ -22,13 +26,16 @@ export function TherapyScheduling() {
   const [patients, setPatients] = useState<any[]>([]);
   const [therapyTypes, setTherapyTypes] = useState<any[]>([]);
   const [practitioners, setPractitioners] = useState<string[]>([]);
-  const [doctors, setDoctors] = useState<any[]>([]);
+  const [internalDoctors, setInternalDoctors] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Use external doctors if provided, otherwise use internal state
+  const doctors = externalDoctors || internalDoctors;
 
   // Load data from database
   useEffect(() => {
     loadData();
-  }, []);
+  }, [externalDoctors]); // Reload when external doctors change
 
   const loadData = async () => {
     try {
@@ -37,14 +44,19 @@ export function TherapyScheduling() {
         databaseService.therapySessions.getTherapySessions(),
         databaseService.patients.getPatients(),
         databaseService.referenceData.getTherapyTypes(),
-        databaseService.doctors.getDoctors(),
+        // Only fetch doctors if not provided externally
+        externalDoctors ? Promise.resolve(externalDoctors) : databaseService.doctors.getDoctors(),
         databaseService.referenceData.getPractitioners()
       ]);
 
       setSessions(sessionsData);
       setPatients(patientsData);
       setTherapyTypes(therapyTypesData);
-      setDoctors(doctorsData);
+      
+      // Only update internal doctors if not using external
+      if (!externalDoctors) {
+        setInternalDoctors(doctorsData);
+      }
       
       // Combine doctor names with legacy practitioners
       const doctorNames = doctorsData.map(d => d.name);

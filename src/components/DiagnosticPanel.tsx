@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { CheckCircle2, XCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
-import { databaseService } from '../utils/database';
+import { databaseService } from '../utils/database-smart';
 
 export function DiagnosticPanel() {
   const [isRunning, setIsRunning] = useState(false);

@@ -7,7 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Calendar, Users, Clock, LogOut, Eye, Phone, Mail, MapPin, FileText, Loader2 } from 'lucide-react';
 import { User, TherapySession, Patient } from '../App';
-import { databaseService } from '../utils/database';
+import { databaseService } from '../utils/database-smart';
+import { Navbar } from './Navbar';
+import { FeedbackManagement } from './FeedbackManagement';
 import { toast } from 'sonner@2.0.3';
 
 interface DoctorDashboardProps {
@@ -120,37 +122,39 @@ export function DoctorDashboard({ user, onLogout }: DoctorDashboardProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-semibold text-green-700">
-                🌿 Panchakarma Doctor Portal
-              </h1>
-              <Badge variant="secondary">Doctor</Badge>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-muted-foreground">
-                Dr. {user.name}
-              </span>
-              <Button variant="outline" size="sm" onClick={onLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Navbar 
+        user={user} 
+        onLogout={onLogout} 
+        title="🌿 Panchakarma Doctor Portal"
+        showNotifications={false}
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="appointments">My Appointments</TabsTrigger>
-            <TabsTrigger value="patients">My Patients</TabsTrigger>
-            <TabsTrigger value="schedule">Schedule</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto mb-8">
+            <TabsList className="grid w-full grid-cols-5 min-w-[300px] sm:min-w-[600px] lg:min-w-0">
+              <TabsTrigger value="overview" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Overview</span>
+                <span className="sm:hidden">📊</span>
+              </TabsTrigger>
+              <TabsTrigger value="appointments" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Appointments</span>
+                <span className="sm:hidden">📅</span>
+              </TabsTrigger>
+              <TabsTrigger value="patients" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Patients</span>
+                <span className="sm:hidden">👥</span>
+              </TabsTrigger>
+              <TabsTrigger value="feedback" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Feedback</span>
+                <span className="sm:hidden">💬</span>
+              </TabsTrigger>
+              <TabsTrigger value="schedule" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Schedule</span>
+                <span className="sm:hidden">⏰</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="space-y-6">
             {/* Stats Cards */}
@@ -410,6 +414,10 @@ export function DoctorDashboard({ user, onLogout }: DoctorDashboardProps) {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="feedback">
+            <FeedbackManagement userRole="doctor" userName={user.name} userId={user.id} />
           </TabsContent>
 
           <TabsContent value="schedule">

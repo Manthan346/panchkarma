@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Connection Test - Panchakarma</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .config-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e4e8;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            flex: 1;
+            min-width: 150px;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #results {
+            margin-top: 25px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .success {
+            background: #d4edda;
+            border: 2px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border: 2px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            border: 2px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border: 2px solid #ffeaa7;
+            color: #856404;
+        }
+        
+        .result-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .result-details {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .status-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .status-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .status-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .status-value.success {
+            color: #28a745;
+        }
+        
+        .status-value.error {
+            color: #dc3545;
+        }
+        
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .help-text {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #004085;
+            border-left: 4px solid #004085;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 Database Connection Test</h1>
+        <p class="subtitle">Test your Panchakarma system database connectivity</p>
+
+        <div class="config-section">
+            <div class="form-group">
+                <label for="projectRef">Supabase Project Reference:</label>
+                <input type="text" id="projectRef" placeholder="e.g., zojbxdrvqtnyskpaslri" value="zojbxdrvqtnyskpaslri">
+            </div>
+
+            <div class="form-group">
+                <label for="anonKey">Supabase Anon/Public Key:</label>
+                <input type="password" id="anonKey" placeholder="Your public anon key" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvamJ4ZHJ2cXRueXNrcGFzbHJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkwNjAxNTEsImV4cCI6MjA3NDYzNjE1MX0.ijm8c0TUFei0HKlPTbxaAxxs0Pfvj-Tp2Lu-lCoqgYc">
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="btn-primary" onclick="runAllTests()">
+                🧪 Run All Tests
+            </button>
+            <button class="btn-success" onclick="testEdgeFunction()">
+                ⚡ Test Edge Function
+            </button>
+            <button class="btn-success" onclick="testLogin()">
+                🔐 Test Login
+            </button>
+            <button class="btn-secondary" onclick="clearResults()">
+                🗑️ Clear Results
+            </button>
+        </div>
+
+        <div id="results"></div>
+
+        <div class="help-text">
+            <strong>💡 What this tests:</strong><br>
+            ✅ CORS configuration<br>
+            ✅ Edge Function deployment<br>
+            ✅ Authentication endpoint<br>
+            ✅ Data retrieval<br>
+            ✅ Connection stability
+        </div>
+    </div>
+
+    <script>
+        function getConfig() {
+            const projectRef = document.getElementById('projectRef').value.trim();
+            const anonKey = document.getElementById('anonKey').value.trim();
+            
+            return {
+                projectRef,
+                anonKey,
+                edgeFunctionUrl: `https://${projectRef}.supabase.co/functions/v1/make-server-a3cc576e`
+            };
+        }
+
+        function showResults(type, title, details, statusCards = null) {
+            const results = document.getElementById('results');
+            results.className = type;
+            results.style.display = 'block';
+            
+            let html = `<div class="result-title">${title}</div>`;
+            
+            if (statusCards) {
+                html += '<div class="status-grid">';
+                for (const [label, value, isSuccess] of statusCards) {
+                    const valueClass = isSuccess ? 'success' : 'error';
+                    html += `
+                        <div class="status-card">
+                            <div class="status-label">${label}</div>
+                            <div class="status-value ${valueClass}">${value}</div>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+            }
+            
+            if (details) {
+                html += `<div class="result-details">${details}</div>`;
+            }
+            
+            results.innerHTML = html;
+        }
+
+        function showLoading(message) {
+            const results = document.getElementById('results');
+            results.className = 'info';
+            results.style.display = 'block';
+            results.innerHTML = `
+                <div class="result-title">
+                    <div class="spinner"></div>
+                    ${message}
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').style.display = 'none';
+        }
+
+        async function testEdgeFunction() {
+            clearResults();
+            showLoading('Testing Edge Function...');
+
+            const config = getConfig();
+            const url = `${config.edgeFunctionUrl}/users`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${config.anonKey}`,
+                    },
+                });
+
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers'),
+                };
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    const statusCards = [
+                        ['Status', `${response.status} ${response.statusText}`, true],
+                        ['Users Found', data.users?.length || 0, true],
+                        ['CORS', corsHeaders['Access-Control-Allow-Origin'] ? '✓ Enabled' : '✗ Disabled', !!corsHeaders['Access-Control-Allow-Origin']],
+                    ];
+                    
+                    showResults(
+                        'success',
+                        '✅ Edge Function Connected!',
+                        `URL: ${url}\n\nCORS Headers:\n${JSON.stringify(corsHeaders, null, 2)}\n\nResponse:\n${JSON.stringify(data, null, 2)}`,
+                        statusCards
+                    );
+                } else {
+                    const errorText = await response.text();
+                    showResults(
+                        'error',
+                        '❌ Edge Function Error',
+                        `Status: ${response.status} ${response.statusText}\n\nCORS Headers:\n${JSON.stringify(corsHeaders, null, 2)}\n\nError:\n${errorText}`
+                    );
+                }
+            } catch (error) {
+                showResults(
+                    'error',
+                    '❌ Connection Failed',
+                    `Error: ${error.message}\n\nPossible causes:\n- Edge Function not deployed\n- CORS blocking request\n- Network connectivity issue\n- Invalid URL or credentials\n\nURL attempted: ${url}`
+                );
+            }
+        }
+
+        async function testLogin() {
+            clearResults();
+            showLoading('Testing Login...');
+
+            const config = getConfig();
+            const url = `${config.edgeFunctionUrl}/auth/login`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${config.anonKey}`,
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@panchakarma.com',
+                        password: 'admin123'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    const statusCards = [
+                        ['Status', `${response.status} ${response.statusText}`, true],
+                        ['User Role', data.user?.role || 'Unknown', true],
+                        ['User Name', data.user?.name || 'Unknown', true],
+                    ];
+                    
+                    showResults(
+                        'success',
+                        '✅ Login Successful!',
+                        `Logged in as: ${data.user?.name}\nRole: ${data.user?.role}\nEmail: ${data.user?.email}\n\nFull Response:\n${JSON.stringify(data, null, 2)}`,
+                        statusCards
+                    );
+                } else {
+                    const errorText = await response.text();
+                    showResults(
+                        'error',
+                        '❌ Login Failed',
+                        `Status: ${response.status} ${response.statusText}\n\nError:\n${errorText}\n\nURL: ${url}`
+                    );
+                }
+            } catch (error) {
+                showResults(
+                    'error',
+                    '❌ Login Request Failed',
+                    `Error: ${error.message}\n\nURL attempted: ${url}`
+                );
+            }
+        }
+
+        async function testDataRetrieval() {
+            const config = getConfig();
+            const endpoints = [
+                { name: 'Users', url: '/users', key: 'users' },
+                { name: 'Patients', url: '/patients', key: 'patients' },
+                { name: 'Doctors', url: '/doctors', key: 'doctors' },
+                { name: 'Therapy Sessions', url: '/therapy-sessions', key: 'sessions' },
+                { name: 'Therapy Types', url: '/therapy-types', key: 'therapyTypes' },
+            ];
+
+            const results = [];
+
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(`${config.edgeFunctionUrl}${endpoint.url}`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${config.anonKey}`,
+                        },
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        const count = data[endpoint.key]?.length || 0;
+                        results.push([endpoint.name, `${count} items`, true]);
+                    } else {
+                        results.push([endpoint.name, 'Failed', false]);
+                    }
+                } catch (error) {
+                    results.push([endpoint.name, 'Error', false]);
+                }
+            }
+
+            return results;
+        }
+
+        async function runAllTests() {
+            clearResults();
+            showLoading('Running comprehensive tests...');
+
+            const config = getConfig();
+            const testResults = {
+                edgeFunction: false,
+                cors: false,
+                auth: false,
+                dataRetrieval: false,
+            };
+
+            // Test 1: Edge Function
+            try {
+                const response = await fetch(`${config.edgeFunctionUrl}/users`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${config.anonKey}`,
+                    },
+                });
+
+                testResults.edgeFunction = response.ok;
+                testResults.cors = !!response.headers.get('Access-Control-Allow-Origin');
+            } catch (error) {
+                // Failed
+            }
+
+            // Test 2: Authentication
+            try {
+                const response = await fetch(`${config.edgeFunctionUrl}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${config.anonKey}`,
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@panchakarma.com',
+                        password: 'admin123'
+                    })
+                });
+
+                testResults.auth = response.ok;
+            } catch (error) {
+                // Failed
+            }
+
+            // Test 3: Data Retrieval
+            const dataResults = await testDataRetrieval();
+            testResults.dataRetrieval = dataResults.every(r => r[2]);
+
+            // Show results
+            const allPassed = Object.values(testResults).every(v => v);
+            
+            const statusCards = [
+                ['Edge Function', testResults.edgeFunction ? '✓ Connected' : '✗ Failed', testResults.edgeFunction],
+                ['CORS Headers', testResults.cors ? '✓ Enabled' : '✗ Disabled', testResults.cors],
+                ['Authentication', testResults.auth ? '✓ Working' : '✗ Failed', testResults.auth],
+                ['Data Retrieval', testResults.dataRetrieval ? '✓ Working' : '✗ Failed', testResults.dataRetrieval],
+            ];
+
+            statusCards.push(...dataResults);
+
+            if (allPassed) {
+                showResults(
+                    'success',
+                    '🎉 All Tests Passed!',
+                    `✅ Edge Function is deployed and working\n✅ CORS is properly configured\n✅ Authentication is functional\n✅ All data endpoints are accessible\n\nYour database is fully connected and ready to use!`,
+                    statusCards
+                );
+            } else {
+                showResults(
+                    allPassed ? 'success' : 'warning',
+                    allPassed ? '✅ All Tests Passed!' : '⚠️ Some Tests Failed',
+                    allPassed ? 
+                        'Your database connection is working perfectly!' :
+                        'Some issues detected. Check the status cards above.\n\nCommon solutions:\n- Deploy the Edge Function\n- Set environment secrets\n- Clear browser cache\n- Check Supabase dashboard for errors',
+                    statusCards
+                );
+            }
+        }
+
+        // Auto-run tests on page load if config is available
+        window.addEventListener('load', () => {
+            const config = getConfig();
+            if (config.projectRef && config.anonKey) {
+                setTimeout(() => runAllTests(), 500);
+            }
+        });
+    </script>
+</body>
+</html>

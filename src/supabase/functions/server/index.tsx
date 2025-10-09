@@ -33,11 +33,15 @@ app.use('*', async (c, next) => {
 
 app.use('*', logger(console.log));
 
-// Supabase client
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-);
+// Supabase client - uses automatically provided environment variables
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing Supabase credentials!');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Initialize database tables
 async function initializeDatabase() {

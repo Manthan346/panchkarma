@@ -4,7 +4,8 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { PatientDashboard } from './components/PatientDashboard';
 import { DoctorDashboard } from './components/DoctorDashboard';
 import { Toaster } from './components/ui/sonner';
-import { databaseService } from './utils/database';
+import { databaseService } from './utils/database-smart';
+import { supabase } from './utils/supabase-client';
 import { toast } from 'sonner@2.0.3';
 
 // User data structure
@@ -77,39 +78,99 @@ export interface Notification {
   updated_at?: string;
 }
 
+export interface Feedback {
+  id: string;
+  patient_id: string;
+  session_id: string;
+  patient_name?: string;
+  therapy_type?: string;
+  date: string;
+  rating: number; // 1-10 scale
+  effectiveness_rating: number; // 1-10 scale
+  comfort_rating: number; // 1-10 scale
+  feedback: string;
+  side_effects: string;
+  improvements: string;
+  would_recommend: boolean;
+  status: 'submitted' | 'reviewed' | 'responded';
+  admin_response?: string;
+  admin_response_date?: string;
+  admin_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user session exists in localStorage (basic session management)
+    // Check Supabase session and fallback to localStorage
     const checkSession = async () => {
       try {
-        const savedUser = localStorage.getItem('panchakarma_user');
-        if (savedUser) {
-          const user = JSON.parse(savedUser);
-          setCurrentUser(user);
+        // Try to get Supabase session first
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // User is logged in with Supabase
+          const userData = await databaseService.auth.getUserData(session.user.id);
+          setCurrentUser(userData);
+          localStorage.setItem('panchakarma_user', JSON.stringify(userData));
+        } else {
+          // Fallback to localStorage for demo mode
+          const savedUser = localStorage.getItem('panchakarma_user');
+          if (savedUser) {
+            const user = JSON.parse(savedUser);
+            setCurrentUser(user);
+          }
         }
         
         // Test connection in background (silent)
-        const connectionResult = await databaseService.connection.testConnection();
-        
-        // Show demo mode notice once per session if using fallback
-        const hasSeenDemoNotice = sessionStorage.getItem('demo_notice_shown');
-        if (!hasSeenDemoNotice && connectionResult.usingFallback) {
-          toast.info('Using demo mode with sample data', {
-            description: 'Connect to Supabase for persistent storage',
-            duration: 3000
-          });
-          sessionStorage.setItem('demo_notice_shown', 'true');
+        try {
+          const connectionResult = await databaseService.connection.testConnection();
+          
+          // Show connection status once per session
+          const hasSeenNotice = sessionStorage.getItem('connection_notice_shown');
+          if (!hasSeenNotice) {
+            if (connectionResult.usingFallback) {
+              toast.info('📊 Running in Demo Mode', {
+                description: 'All features available - data resets on refresh',
+                duration: 4000
+              });
+            } else {
+              toast.success('✅ Connected to Supabase', {
+                description: 'Your data is securely saved',
+                duration: 3000
+              });
+            }
+            sessionStorage.setItem('connection_notice_shown', 'true');
+          }
+        } catch (error) {
+          console.log('Connection test:', error);
         }
       } catch (error) {
-        // Silent fail - just continue with demo mode
+        console.error('Session check error:', error);
       }
       setIsLoading(false);
     };
 
     checkSession();
+
+    // Listen to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const userData = await databaseService.auth.getUserData(session.user.id);
+        setCurrentUser(userData);
+        localStorage.setItem('panchakarma_user', JSON.stringify(userData));
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        localStorage.removeItem('panchakarma_user');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleLogin = (user: User) => {
@@ -124,7 +185,14 @@ export default function App() {
     toast.success(`Welcome back, ${user.name}!`);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Try to sign out from Supabase
+      await databaseService.auth.signOut();
+    } catch (error) {
+      console.log('Supabase signout:', error);
+    }
+    
     setCurrentUser(null);
     localStorage.removeItem('panchakarma_user');
     toast.success('Logged out successfully');

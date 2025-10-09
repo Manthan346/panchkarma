@@ -187,3 +187,22 @@
 html {
   font-size: var(--font-size);
 }
+
+/* Mobile-optimized emoji and icon styles */
+@media (max-width: 640px) {
+  .mobile-emoji {
+    font-size: 1.2em;
+    line-height: 1;
+  }
+  
+  /* Ensure touch targets are large enough */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Improve tap target spacing */
+  [role="tablist"] button {
+    padding: 0.75rem 0.5rem;
+  }
+}

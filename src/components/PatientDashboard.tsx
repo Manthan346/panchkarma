@@ -6,10 +6,11 @@ import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { Bell, Calendar, Activity, MessageSquare, LogOut, Clock, Loader2 } from 'lucide-react';
 import { User, Patient, TherapySession, ProgressData, Notification } from '../App';
-import { databaseService } from '../utils/database';
+import { databaseService } from '../utils/database-smart';
 import { PatientProgress } from './PatientProgress';
 import { PatientAppointments } from './PatientAppointments';
 import { PatientFeedback } from './PatientFeedback';
+import { Navbar } from './Navbar';
 import { toast } from 'sonner@2.0.3';
 
 interface PatientDashboardProps {
@@ -93,45 +94,36 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-semibold text-green-700">
-                🌿 My Panchakarma Journey
-              </h1>
-              <Badge variant="secondary">Patient</Badge>
-            </div>
-            <div className="flex items-center space-x-4">
-              {unreadNotifications.length > 0 && (
-                <div className="relative">
-                  <Bell className="w-5 h-5 text-muted-foreground" />
-                  <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full w-4 h-4 text-xs flex items-center justify-center">
-                    {unreadNotifications.length}
-                  </span>
-                </div>
-              )}
-              <span className="text-sm text-muted-foreground">
-                Welcome, {user.name}
-              </span>
-              <Button variant="outline" size="sm" onClick={onLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Navbar 
+        user={user} 
+        onLogout={onLogout} 
+        title="🌿 My Panchakarma Journey"
+        showNotifications={true}
+        unreadCount={unreadNotifications.length}
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="appointments">Appointments</TabsTrigger>
-            <TabsTrigger value="progress">Progress</TabsTrigger>
-            <TabsTrigger value="feedback">Feedback</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto mb-8">
+            <TabsList className="grid w-full grid-cols-4 min-w-[280px] sm:min-w-[400px] lg:min-w-0">
+              <TabsTrigger value="overview" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Overview</span>
+                <span className="sm:hidden">🏠</span>
+              </TabsTrigger>
+              <TabsTrigger value="appointments" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Appointments</span>
+                <span className="sm:hidden">📅</span>
+              </TabsTrigger>
+              <TabsTrigger value="progress" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Progress</span>
+                <span className="sm:hidden">📈</span>
+              </TabsTrigger>
+              <TabsTrigger value="feedback" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Feedback</span>
+                <span className="sm:hidden">💬</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="space-y-6">
             {/* Welcome Card */}
@@ -320,7 +312,7 @@ export function PatientDashboard({ user, onLogout }: PatientDashboardProps) {
           </TabsContent>
 
           <TabsContent value="feedback">
-            <PatientFeedback userId={user.id} />
+            <PatientFeedback userId={user.id} userName={user.name} />
           </TabsContent>
         </Tabs>
       </div>

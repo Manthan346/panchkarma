@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { User } from '../App';
-import { databaseService } from '../utils/database';
+import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
 
 interface AuthPageProps {

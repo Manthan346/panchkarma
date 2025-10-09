@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from './ui/badge';
 import { Wifi, WifiOff } from 'lucide-react';
-import { databaseService } from '../utils/database';
+import { databaseService } from '../utils/database-smart';
 
 export function ConnectionStatus() {
   const [status, setStatus] = useState<{

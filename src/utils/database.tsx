@@ -1,12 +1,7 @@
-import { projectId, publicAnonKey, edgeFunctionUrl, forceDemoMode } from './supabase/info';
+import { toast } from 'sonner@2.0.3';
 
-const API_BASE_URL = edgeFunctionUrl;
-
-// Check if we should use fallback mode from the start
-const FORCE_DEMO_MODE = forceDemoMode || !projectId || !publicAnonKey || projectId === 'demo';
-
-// Fallback demo data
-const fallbackUsers = [
+// Demo data - Always available and working
+const demoUsers = [
   {
     id: '1',
     name: 'Dr. Ayurveda Admin',
@@ -25,7 +20,7 @@ const fallbackUsers = [
     age: 45,
     phone: '+1-555-0123',
     address: '123 Wellness St, Health City, HC 12345',
-    medicalHistory: 'Chronic joint pain, stress-related disorders, digestive issues.',
+    medicalHistory: 'Chronic joint pain, stress-related disorders, digestive issues. Previous treatments include conventional medication with limited success.',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
@@ -70,7 +65,7 @@ const fallbackUsers = [
   }
 ];
 
-const fallbackSessions = [
+const demoSessions = [
   {
     id: '1',
     patient_id: '2',
@@ -80,7 +75,7 @@ const fallbackSessions = [
     duration: 60,
     status: 'scheduled',
     practitioner: 'Dr. Sharma',
-    doctor_id: '3', // Links to Dr. Sharma
+    doctor_id: '3',
     notes: '',
     pre_procedure_instructions: [
       'Fast for 2 hours before treatment',
@@ -106,8 +101,8 @@ const fallbackSessions = [
     duration: 45,
     status: 'completed',
     practitioner: 'Dr. Patel',
-    doctor_id: '4', // Links to Dr. Patel
-    notes: 'Patient responded well to treatment',
+    doctor_id: '4',
+    notes: 'Patient responded well to treatment. Showed significant improvement in joint mobility.',
     pre_procedure_instructions: [
       'Light breakfast only',
       'Remove all jewelry',
@@ -130,7 +125,7 @@ const fallbackSessions = [
     duration: 90,
     status: 'scheduled',
     practitioner: 'Dr. Kumar',
-    doctor_id: '5', // Links to Dr. Kumar
+    doctor_id: '5',
     notes: '',
     pre_procedure_instructions: [
       'Wash hair before treatment',
@@ -148,7 +143,7 @@ const fallbackSessions = [
   }
 ];
 
-const fallbackProgress = [
+const demoProgress = [
   {
     id: '1',
     patient_id: '2',
@@ -156,8 +151,8 @@ const fallbackProgress = [
     symptom_score: 7,
     energy_level: 6,
     sleep_quality: 5,
-    notes: 'Feeling better overall',
-    feedback: 'Treatment is helping with pain management',
+    notes: 'Feeling better overall, less joint stiffness in the morning',
+    feedback: 'Treatment is helping with pain management. Very satisfied with the care.',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
@@ -168,363 +163,32 @@ const fallbackProgress = [
     symptom_score: 5,
     energy_level: 8,
     sleep_quality: 7,
-    notes: 'Significant improvement',
-    feedback: 'Feeling more energetic and positive',
+    notes: 'Significant improvement in energy levels and sleep quality',
+    feedback: 'Feeling more energetic and positive. The treatments are really working!',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '3',
+    patient_id: '2',
+    date: new Date().toISOString().split('T')[0],
+    symptom_score: 4,
+    energy_level: 9,
+    sleep_quality: 8,
+    notes: 'Best I\'ve felt in months. Pain significantly reduced.',
+    feedback: 'The Panchakarma treatments have exceeded my expectations.',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
 ];
 
-// Track if API is available
-let apiAvailable = !FORCE_DEMO_MODE;
-
-// Helper function to make API requests with fallback
-async function apiRequest(endpoint: string, options: RequestInit = {}, retries = 0) {
-  // If we're in forced demo mode or API was previously unavailable, skip API calls
-  if (FORCE_DEMO_MODE || !apiAvailable) {
-    throw new Error('API unavailable - using fallback mode');
-  }
-
-  const url = `${API_BASE_URL}${endpoint}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${publicAnonKey}`,
-    ...options.headers,
-  };
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
-      
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          errorData = { error: `HTTP ${response.status}` };
-        }
-        
-        const errorMessage = errorData.error || `HTTP ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      if (attempt === retries) {
-        // Mark API as unavailable on final failure
-        apiAvailable = false;
-        throw error;
-      }
-      
-      // Wait before retry with exponential backoff
-      const waitTime = 500 * Math.pow(2, attempt);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-  }
-}
-
-// Authentication
-export const authService = {
-  async login(email: string, password: string) {
-    try {
-      const response = await apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      return response.user;
-    } catch (error) {
-      // Silent fallback - authenticate with demo data
-      const user = fallbackUsers.find(u => u.email === email && u.password === password);
-      if (!user) {
-        throw new Error('Invalid credentials');
-      }
-      return user;
-    }
-  },
-};
-
-// Users
-export const userService = {
-  async getUsers() {
-    try {
-      const response = await apiRequest('/users');
-      return response.users;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackUsers;
-    }
-  },
-
-  async createUser(userData: any) {
-    try {
-      const response = await apiRequest('/users', {
-        method: 'POST',
-        body: JSON.stringify(userData),
-      });
-      return response.user;
-    } catch (error) {
-      // Silent fallback - create user in demo mode
-      const newUser = {
-        id: Date.now().toString(),
-        ...userData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      fallbackUsers.push(newUser);
-      return newUser;
-    }
-  },
-};
-
-// Patients
-export const patientService = {
-  async getPatients() {
-    try {
-      const response = await apiRequest('/patients');
-      return response.patients;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackUsers.filter(u => u.role === 'patient');
-    }
-  },
-
-  async getPatient(id: string) {
-    try {
-      const response = await apiRequest(`/patients/${id}`);
-      return response.patient;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackUsers.find(u => u.id === id && u.role === 'patient') || null;
-    }
-  },
-
-  async createPatient(patientData: any) {
-    try {
-      const response = await apiRequest('/users', {
-        method: 'POST',
-        body: JSON.stringify({ ...patientData, role: 'patient' }),
-      });
-      return response.user;
-    } catch (error) {
-      // Silent fallback - create patient in demo mode
-      const newPatient = {
-        id: Date.now().toString(),
-        ...patientData,
-        role: 'patient',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      fallbackUsers.push(newPatient);
-      return newPatient;
-    }
-  },
-
-  async updatePatient(id: string, updates: any) {
-    try {
-      const response = await apiRequest(`/patients/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-      });
-      return response.patient;
-    } catch (error) {
-      // Silent fallback - update in demo mode
-      const patientIndex = fallbackUsers.findIndex(u => u.id === id && u.role === 'patient');
-      if (patientIndex !== -1) {
-        fallbackUsers[patientIndex] = {
-          ...fallbackUsers[patientIndex],
-          ...updates,
-          updated_at: new Date().toISOString()
-        };
-        return fallbackUsers[patientIndex];
-      }
-      throw new Error('Patient not found');
-    }
-  },
-};
-
-// Doctors
-export const doctorService = {
-  async getDoctors() {
-    try {
-      const response = await apiRequest('/doctors');
-      return response.doctors;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackUsers.filter(u => u.role === 'doctor');
-    }
-  },
-
-  async getDoctor(id: string) {
-    try {
-      const response = await apiRequest(`/doctors/${id}`);
-      return response.doctor;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackUsers.find(u => u.id === id && u.role === 'doctor') || null;
-    }
-  },
-
-  async createDoctor(doctorData: any) {
-    try {
-      const response = await apiRequest('/users', {
-        method: 'POST',
-        body: JSON.stringify({ ...doctorData, role: 'doctor' }),
-      });
-      return response.user;
-    } catch (error) {
-      // Silent fallback - create doctor in demo mode
-      const newDoctor = {
-        id: Date.now().toString(),
-        ...doctorData,
-        role: 'doctor',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      fallbackUsers.push(newDoctor);
-      return newDoctor;
-    }
-  },
-
-  async updateDoctor(id: string, updates: any) {
-    try {
-      const response = await apiRequest(`/doctors/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-      });
-      return response.doctor;
-    } catch (error) {
-      // Silent fallback - update in demo mode
-      const doctorIndex = fallbackUsers.findIndex(u => u.id === id && u.role === 'doctor');
-      if (doctorIndex !== -1) {
-        fallbackUsers[doctorIndex] = {
-          ...fallbackUsers[doctorIndex],
-          ...updates,
-          updated_at: new Date().toISOString()
-        };
-        return fallbackUsers[doctorIndex];
-      }
-      throw new Error('Doctor not found');
-    }
-  },
-};
-
-// Therapy Sessions
-export const therapySessionService = {
-  async getTherapySessions() {
-    try {
-      const response = await apiRequest('/therapy-sessions');
-      return response.sessions;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackSessions;
-    }
-  },
-
-  async getPatientTherapySessions(patientId: string) {
-    try {
-      const response = await apiRequest(`/therapy-sessions/patient/${patientId}`);
-      return response.sessions;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackSessions.filter(s => s.patient_id === patientId);
-    }
-  },
-
-  async createTherapySession(sessionData: any) {
-    try {
-      const response = await apiRequest('/therapy-sessions', {
-        method: 'POST',
-        body: JSON.stringify(sessionData),
-      });
-      return response.session;
-    } catch (error) {
-      // Silent fallback - create in demo mode
-      const newSession = {
-        id: Date.now().toString(),
-        ...sessionData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      fallbackSessions.push(newSession);
-      return newSession;
-    }
-  },
-
-  async updateTherapySession(id: string, updates: any) {
-    try {
-      const response = await apiRequest(`/therapy-sessions/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-      });
-      return response.session;
-    } catch (error) {
-      // Silent fallback - update in demo mode
-      const sessionIndex = fallbackSessions.findIndex(s => s.id === id);
-      if (sessionIndex !== -1) {
-        fallbackSessions[sessionIndex] = {
-          ...fallbackSessions[sessionIndex],
-          ...updates,
-          updated_at: new Date().toISOString()
-        };
-        return fallbackSessions[sessionIndex];
-      }
-      throw new Error('Session not found');
-    }
-  },
-};
-
-// Progress Data
-export const progressService = {
-  async getPatientProgress(patientId: string) {
-    try {
-      const response = await apiRequest(`/progress/patient/${patientId}`);
-      return response.progress;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackProgress.filter(p => p.patient_id === patientId);
-    }
-  },
-
-  async createProgressEntry(progressData: any) {
-    try {
-      const response = await apiRequest('/progress', {
-        method: 'POST',
-        body: JSON.stringify(progressData),
-      });
-      return response.progress;
-    } catch (error) {
-      // Silent fallback - create in demo mode
-      const newProgress = {
-        id: Date.now().toString(),
-        ...progressData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      fallbackProgress.push(newProgress);
-      return newProgress;
-    }
-  },
-};
-
-// Fallback notifications
-const fallbackNotifications = [
+const demoNotifications = [
   {
     id: '1',
     patient_id: '2',
     type: 'pre-procedure',
     title: 'Tomorrow\'s Abhyanga Treatment',
-    message: 'Please fast for 2 hours before your 9:00 AM appointment. Wear comfortable clothing.',
+    message: 'Please fast for 2 hours before your 9:00 AM appointment. Wear comfortable clothing and arrive 15 minutes early.',
     date: new Date().toISOString().split('T')[0],
     read: false,
     urgent: true,
@@ -536,72 +200,52 @@ const fallbackNotifications = [
     patient_id: '2',
     type: 'reminder',
     title: 'Daily Progress Update',
-    message: 'Please update your daily symptoms and energy levels in the app.',
+    message: 'Please update your daily symptoms and energy levels in the app to help track your progress.',
     date: new Date().toISOString().split('T')[0],
     read: false,
+    urgent: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '3',
+    patient_id: '2',
+    type: 'post-procedure',
+    title: 'Post-Treatment Care',
+    message: 'Remember to follow the post-procedure instructions: drink warm water, rest, and avoid cold exposure.',
+    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+    read: true,
     urgent: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
 ];
 
-// Notifications
-export const notificationService = {
-  async getPatientNotifications(patientId: string) {
-    try {
-      const response = await apiRequest(`/notifications/patient/${patientId}`);
-      return response.notifications;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackNotifications.filter(n => n.patient_id === patientId);
-    }
-  },
+const demoFeedback = [
+  {
+    id: '1',
+    patient_id: '2',
+    session_id: '2',
+    patient_name: 'John Patient',
+    therapy_type: 'Swedana (Steam Therapy)',
+    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+    rating: 9,
+    effectiveness_rating: 8,
+    comfort_rating: 9,
+    feedback: 'The Swedana therapy was incredibly relaxing. I felt much better after the session and noticed improved circulation.',
+    side_effects: 'None reported',
+    improvements: 'Better sleep quality, reduced muscle tension',
+    would_recommend: true,
+    status: 'responded',
+    admin_response: 'Thank you for your feedback! I\'m glad to hear about the improvements in your sleep quality and reduced muscle tension. This is exactly what we aim for with Swedana therapy. Keep following the post-treatment guidelines for continued benefits.',
+    admin_response_date: new Date().toISOString().split('T')[0],
+    admin_name: 'Dr. Patel',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
 
-  async createNotification(notificationData: any) {
-    try {
-      const response = await apiRequest('/notifications', {
-        method: 'POST',
-        body: JSON.stringify(notificationData),
-      });
-      return response.notification;
-    } catch (error) {
-      // Silent fallback - create in demo mode
-      const newNotification = {
-        id: Date.now().toString(),
-        ...notificationData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      fallbackNotifications.push(newNotification);
-      return newNotification;
-    }
-  },
-
-  async updateNotification(id: string, updates: any) {
-    try {
-      const response = await apiRequest(`/notifications/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-      });
-      return response.notification;
-    } catch (error) {
-      // Silent fallback - update in demo mode
-      const notificationIndex = fallbackNotifications.findIndex(n => n.id === id);
-      if (notificationIndex !== -1) {
-        fallbackNotifications[notificationIndex] = {
-          ...fallbackNotifications[notificationIndex],
-          ...updates,
-          updated_at: new Date().toISOString()
-        };
-        return fallbackNotifications[notificationIndex];
-      }
-      throw new Error('Notification not found');
-    }
-  },
-};
-
-// Fallback reference data
-const fallbackTherapyTypes = [
+const demoTherapyTypes = [
   {
     name: 'Abhyanga (Oil Massage)',
     duration: 60,
@@ -626,10 +270,15 @@ const fallbackTherapyTypes = [
     name: 'Nasya (Nasal Therapy)',
     duration: 30,
     description: 'Nasal administration of medicated oils'
+  },
+  {
+    name: 'Basti (Medicated Enema)',
+    duration: 45,
+    description: 'Herbal enema therapy for digestive and nervous system'
   }
 ];
 
-const fallbackPractitioners = [
+const demoPractitioners = [
   'Dr. Sharma',
   'Dr. Patel',
   'Dr. Kumar',
@@ -637,100 +286,326 @@ const fallbackPractitioners = [
   'Dr. Singh'
 ];
 
-// Reference Data
+// Generate unique IDs
+function generateId(): string {
+  return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
+
+// Authentication service - Always works with demo data
+export const authService = {
+  async login(email: string, password: string) {
+    const user = demoUsers.find(u => u.email === email && u.password === password);
+    if (!user) {
+      throw new Error('Invalid email or password');
+    }
+    return { ...user };
+  },
+};
+
+// Users service
+export const userService = {
+  async getUsers() {
+    return [...demoUsers];
+  },
+
+  async createUser(userData: any) {
+    const newUser = {
+      id: generateId(),
+      ...userData,
+      // Add default fields for doctors if not provided
+      ...(userData.role === 'doctor' && {
+        phone: userData.phone || '+1-000-0000',
+        specialization: userData.specialization || 'General Ayurveda',
+        qualification: userData.qualification || 'BAMS',
+        experience: userData.experience || 0
+      }),
+      // Add default fields for patients if not provided
+      ...(userData.role === 'patient' && {
+        phone: userData.phone || '+1-000-0000',
+        age: userData.age || 0,
+        address: userData.address || '',
+        medicalHistory: userData.medicalHistory || ''
+      }),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoUsers.push(newUser);
+    return newUser;
+  },
+};
+
+// Patients service
+export const patientService = {
+  async getPatients() {
+    return demoUsers.filter(u => u.role === 'patient');
+  },
+
+  async getPatient(id: string) {
+    return demoUsers.find(u => u.id === id && u.role === 'patient') || null;
+  },
+
+  async createPatient(patientData: any) {
+    const newPatient = {
+      id: generateId(),
+      ...patientData,
+      role: 'patient',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoUsers.push(newPatient);
+    return newPatient;
+  },
+
+  async updatePatient(id: string, updates: any) {
+    const patientIndex = demoUsers.findIndex(u => u.id === id && u.role === 'patient');
+    if (patientIndex === -1) {
+      throw new Error('Patient not found');
+    }
+    
+    demoUsers[patientIndex] = {
+      ...demoUsers[patientIndex],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    return demoUsers[patientIndex];
+  },
+};
+
+// Doctors service
+export const doctorService = {
+  async getDoctors() {
+    return demoUsers.filter(u => u.role === 'doctor');
+  },
+
+  async getDoctor(id: string) {
+    return demoUsers.find(u => u.id === id && u.role === 'doctor') || null;
+  },
+
+  async createDoctor(doctorData: any) {
+    const newDoctor = {
+      id: generateId(),
+      ...doctorData,
+      role: 'doctor',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoUsers.push(newDoctor);
+    return newDoctor;
+  },
+
+  async updateDoctor(id: string, updates: any) {
+    const doctorIndex = demoUsers.findIndex(u => u.id === id && u.role === 'doctor');
+    if (doctorIndex === -1) {
+      throw new Error('Doctor not found');
+    }
+    
+    demoUsers[doctorIndex] = {
+      ...demoUsers[doctorIndex],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    return demoUsers[doctorIndex];
+  },
+};
+
+// Therapy Sessions service
+export const therapySessionService = {
+  async getTherapySessions() {
+    return [...demoSessions];
+  },
+
+  async getPatientTherapySessions(patientId: string) {
+    return demoSessions.filter(s => s.patient_id === patientId);
+  },
+
+  async createTherapySession(sessionData: any) {
+    const newSession = {
+      id: generateId(),
+      ...sessionData,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoSessions.push(newSession);
+    return newSession;
+  },
+
+  async updateTherapySession(id: string, updates: any) {
+    const sessionIndex = demoSessions.findIndex(s => s.id === id);
+    if (sessionIndex === -1) {
+      throw new Error('Therapy session not found');
+    }
+    
+    demoSessions[sessionIndex] = {
+      ...demoSessions[sessionIndex],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    return demoSessions[sessionIndex];
+  },
+};
+
+// Progress service
+export const progressService = {
+  async getPatientProgress(patientId: string) {
+    return demoProgress.filter(p => p.patient_id === patientId);
+  },
+
+  async createProgressEntry(progressData: any) {
+    const newProgress = {
+      id: generateId(),
+      ...progressData,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoProgress.push(newProgress);
+    return newProgress;
+  },
+};
+
+// Notifications service
+export const notificationService = {
+  async getPatientNotifications(patientId: string) {
+    return demoNotifications.filter(n => n.patient_id === patientId);
+  },
+
+  async createNotification(notificationData: any) {
+    const newNotification = {
+      id: generateId(),
+      ...notificationData,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoNotifications.push(newNotification);
+    return newNotification;
+  },
+
+  async updateNotification(id: string, updates: any) {
+    const notificationIndex = demoNotifications.findIndex(n => n.id === id);
+    if (notificationIndex === -1) {
+      throw new Error('Notification not found');
+    }
+    
+    demoNotifications[notificationIndex] = {
+      ...demoNotifications[notificationIndex],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    return demoNotifications[notificationIndex];
+  },
+};
+
+// Reference Data service
 export const referenceDataService = {
   async getTherapyTypes() {
-    try {
-      const response = await apiRequest('/therapy-types');
-      return response.therapyTypes;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackTherapyTypes;
-    }
+    return [...demoTherapyTypes];
   },
 
   async getPractitioners() {
-    try {
-      const response = await apiRequest('/practitioners');
-      return response.practitioners;
-    } catch (error) {
-      // Silent fallback to demo data
-      return fallbackPractitioners;
-    }
+    return [...demoPractitioners];
   },
 };
 
-// Analytics
+// Analytics service
 export const analyticsService = {
   async getAnalytics() {
-    try {
-      const response = await apiRequest('/analytics');
-      return response.analytics;
-    } catch (error) {
-      // Silent fallback - calculate from demo data
-      const totalPatients = fallbackUsers.filter(u => u.role === 'patient').length;
-      const totalSessions = fallbackSessions.length;
-      const completedSessions = fallbackSessions.filter(s => s.status === 'completed').length;
-      const upcomingSessions = fallbackSessions.filter(s => s.status === 'scheduled').length;
-      
-      const avgSymptomScore = fallbackProgress.reduce((sum, p) => sum + p.symptom_score, 0) / (fallbackProgress.length || 1);
-      const avgEnergyLevel = fallbackProgress.reduce((sum, p) => sum + p.energy_level, 0) / (fallbackProgress.length || 1);
-      const avgSleepQuality = fallbackProgress.reduce((sum, p) => sum + p.sleep_quality, 0) / (fallbackProgress.length || 1);
-      
-      return {
-        totalPatients,
-        totalSessions,
-        completedSessions,
-        upcomingSessions,
-        avgSymptomScore: Math.round(avgSymptomScore * 10) / 10,
-        avgEnergyLevel: Math.round(avgEnergyLevel * 10) / 10,
-        avgSleepQuality: Math.round(avgSleepQuality * 10) / 10
-      };
-    }
+    const totalPatients = demoUsers.filter(u => u.role === 'patient').length;
+    const totalSessions = demoSessions.length;
+    const completedSessions = demoSessions.filter(s => s.status === 'completed').length;
+    const upcomingSessions = demoSessions.filter(s => s.status === 'scheduled').length;
+    
+    const avgSymptomScore = demoProgress.reduce((sum, p) => sum + p.symptom_score, 0) / (demoProgress.length || 1);
+    const avgEnergyLevel = demoProgress.reduce((sum, p) => sum + p.energy_level, 0) / (demoProgress.length || 1);
+    const avgSleepQuality = demoProgress.reduce((sum, p) => sum + p.sleep_quality, 0) / (demoProgress.length || 1);
+    
+    return {
+      totalPatients,
+      totalSessions,
+      completedSessions,
+      upcomingSessions,
+      avgSymptomScore: Math.round(avgSymptomScore * 10) / 10,
+      avgEnergyLevel: Math.round(avgEnergyLevel * 10) / 10,
+      avgSleepQuality: Math.round(avgSleepQuality * 10) / 10
+    };
   },
 };
 
-// Connection test
+// Feedback service
+export const feedbackService = {
+  async getAllFeedback() {
+    return [...demoFeedback];
+  },
+
+  async getPatientFeedback(patientId: string) {
+    return demoFeedback.filter(f => f.patient_id === patientId);
+  },
+
+  async getFeedbackBySession(sessionId: string) {
+    return demoFeedback.find(f => f.session_id === sessionId);
+  },
+
+  async createFeedback(feedbackData: any) {
+    const newFeedback = {
+      id: generateId(),
+      ...feedbackData,
+      status: 'submitted',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoFeedback.push(newFeedback);
+    return newFeedback;
+  },
+
+  async updateFeedback(id: string, updates: any) {
+    const feedbackIndex = demoFeedback.findIndex(f => f.id === id);
+    if (feedbackIndex === -1) {
+      throw new Error('Feedback not found');
+    }
+    
+    demoFeedback[feedbackIndex] = {
+      ...demoFeedback[feedbackIndex],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    return demoFeedback[feedbackIndex];
+  },
+
+  async respondToFeedback(id: string, response: string, adminName: string) {
+    const feedbackIndex = demoFeedback.findIndex(f => f.id === id);
+    if (feedbackIndex === -1) {
+      throw new Error('Feedback not found');
+    }
+    
+    demoFeedback[feedbackIndex] = {
+      ...demoFeedback[feedbackIndex],
+      admin_response: response,
+      admin_response_date: new Date().toISOString().split('T')[0],
+      admin_name: adminName,
+      status: 'responded',
+      updated_at: new Date().toISOString()
+    };
+    return demoFeedback[feedbackIndex];
+  },
+};
+
+// Connection service - Always reports demo mode for now
 export const connectionService = {
   async testConnection() {
-    if (FORCE_DEMO_MODE) {
-      return { success: true, message: 'Demo mode', usingFallback: true };
-    }
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-      
-      const response = await fetch(`${API_BASE_URL}/users`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${publicAnonKey}`,
-        },
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        apiAvailable = true;
-        return { 
-          success: true, 
-          message: 'Connected to API',
-          usingFallback: false
-        };
-      } else {
-        throw new Error('API not available');
-      }
-    } catch (error) {
-      apiAvailable = false;
-      return { 
-        success: true, 
-        message: 'Demo mode',
-        usingFallback: true
-      };
-    }
+    return { 
+      success: true, 
+      message: 'Demo mode - All features available',
+      usingFallback: true,
+      supabaseAvailable: false,
+      demoMode: true
+    };
   },
+  
+  getStatus() {
+    return {
+      supabaseAvailable: false,
+      usingDemoMode: true,
+      demoMode: true
+    };
+  }
 };
 
 // Combined service for easy access
@@ -742,6 +617,7 @@ export const databaseService = {
   therapySessions: therapySessionService,
   progress: progressService,
   notifications: notificationService,
+  feedback: feedbackService,
   referenceData: referenceDataService,
   analytics: analyticsService,
   connection: connectionService,
