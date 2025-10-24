@@ -115,89 +115,88 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    // Check Supabase session and fallback to localStorage
-    const checkSession = async () => {
-      try {
-        // Try to get Supabase session first
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          // User is logged in with Supabase
-          try {
-            const userData = await databaseService.auth.getUserData(session.user.id);
-            setCurrentUser(userData);
-            localStorage.setItem('panchakarma_user', JSON.stringify(userData));
-          } catch (error) {
-            // Supabase user not in our database, fall back to localStorage
-            console.log('Supabase user not found in database, using demo mode');
-            const savedUser = localStorage.getItem('panchakarma_user');
-            if (savedUser) {
-              const user = JSON.parse(savedUser);
-              setCurrentUser(user);
-            }
-          }
+ useEffect(() => {
+  const checkSession = async () => {
+    setIsLoading(true);
+
+    try {
+      // 1️⃣ Get Supabase session with timeout
+      const sessionTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Supabase session timeout')), 5000)
+      );
+
+      const { data: { session } } = await Promise.race([
+        supabase.auth.getSession(),
+        sessionTimeout
+      ]) as Awaited<ReturnType<typeof supabase.auth.getSession>>;
+
+      // 2️⃣ If session exists, fetch user data safely
+      if (session?.user?.id) {
+        const userDataTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('getUserData timeout')), 5000)
+        );
+
+        const userData = await Promise.race([
+          databaseService.auth.getUserData(session.user.id),
+          userDataTimeout
+        ]);
+
+        if (userData) {
+          setCurrentUser(userData);
+          localStorage.setItem('panchakarma_user', JSON.stringify(userData));
         } else {
-          // Fallback to localStorage for demo mode
+          console.warn('User data not found, falling back to localStorage');
           const savedUser = localStorage.getItem('panchakarma_user');
-          if (savedUser) {
-            const user = JSON.parse(savedUser);
-            setCurrentUser(user);
-          }
+          if (savedUser) setCurrentUser(JSON.parse(savedUser));
         }
-        
+      } else {
+        // 3️⃣ No session, fallback to localStorage
+        const savedUser = localStorage.getItem('panchakarma_user');
+        if (savedUser) setCurrentUser(JSON.parse(savedUser));
+      }
         // Test connection in background (silent)
-        try {
-          const connectionResult = await databaseService.connection.testConnection();
-          
-          // Show connection status once per session
-          const hasSeenNotice = sessionStorage.getItem('connection_notice_shown');
-          if (!hasSeenNotice) {
-            if (connectionResult.usingFallback) {
-              toast.info('📊 Running in Demo Mode', {
-                description: 'All features available - data resets on refresh',
-                duration: 4000
-              });
-            } else {
-              toast.success('✅ Connected to Supabase', {
-                description: 'Your data is securely saved',
-                duration: 3000
-              });
-            }
-            sessionStorage.setItem('connection_notice_shown', 'true');
-          }
-        } catch (error) {
-          console.log('Connection test:', error);
+         try {
+        const connResult = await databaseService.connection.testConnection();
+        if (connResult.usingFallback) {
+          toast.info('📊 Running in Demo Mode', { duration: 4000 });
+        } else {
+          toast.success('✅ Connected to Supabase', { duration: 3000 });
         }
       } catch (error) {
-        console.error('Session check error:', error);
+        console.warn('DB connection test failed:', error);
       }
-      setIsLoading(false);
-    };
+    } catch (error) {
+      console.error('Session check error:', error);
+      // Always fallback to localStorage to prevent freeze
+      const savedUser = localStorage.getItem('panchakarma_user');
+      if (savedUser) setCurrentUser(JSON.parse(savedUser));
+    } finally {
+      setIsLoading(false); // ✅ ensures app stops showing loading
+    }
+  };
+
+  checkSession();
 
     checkSession();
 
     // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      try {
-        if (event === 'SIGNED_IN' && session?.user) {
-          const userData = await databaseService.auth.getUserData(session.user.id);
-          setCurrentUser(userData);
-          localStorage.setItem('panchakarma_user', JSON.stringify(userData));
-        } else if (event === 'SIGNED_OUT') {
-          setCurrentUser(null);
-          localStorage.removeItem('panchakarma_user');
-        }
-      } catch (error) {
-        // Ignore errors from Supabase auth state changes in demo mode
-        console.log('Auth state change handled (demo mode):', error instanceof Error ? error.message : error);
+    try {
+      if (event === 'SIGNED_IN' && session?.user?.id) {
+        const userData = await databaseService.auth.getUserData(session.user.id);
+        setCurrentUser(userData);
+        localStorage.setItem('panchakarma_user', JSON.stringify(userData));
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        localStorage.removeItem('panchakarma_user');
       }
-    });
+    } catch (error) {
+      console.log('Auth state change error (demo fallback):', error);
+    }
+  });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+  return () => subscription.unsubscribe();
+}, []);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -234,13 +233,7 @@ export default function App() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+
 
   if (!currentUser) {
     return <AuthPage onLogin={handleLogin} />;

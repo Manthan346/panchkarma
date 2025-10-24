@@ -45,6 +45,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
   useEffect(() => {
     loadData();
   }, [userId]);
+ 
 
   const loadData = async () => {
     try {
@@ -350,7 +351,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
   return (
     <div className="space-y-6">
       {/* Debug Component - Remove when fixed */}
-      <DoctorLoadTest />
+     
       
       {/* Quick Actions */}
       <Card>

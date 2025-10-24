@@ -65,16 +65,16 @@ export function PatientProgress({ userId }: PatientProgressProps) {
   const handleAddProgress = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    try {
+try {
       const progressData = {
         patient_id: userId,
-        date: new Date().toISOString().split('T')[0],
+        record_date: new Date().toISOString().split('T')[0],
         symptom_score: progressForm.symptomScore[0],
         energy_level: progressForm.energyLevel[0],
         sleep_quality: progressForm.sleepQuality[0],
         notes: progressForm.notes,
         feedback: progressForm.feedback
-      };
+      };    
 
       const newProgress = await databaseService.progress.createProgressEntry(progressData);
       setProgressData(prev => [...prev, newProgress]);

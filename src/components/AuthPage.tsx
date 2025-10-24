@@ -172,7 +172,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                   <p className="font-medium mb-2">Demo Credentials:</p>
                   <p><strong>Admin:</strong> admin@panchakarma.com / admin123</p>
                   <p><strong>Doctor:</strong> sharma@panchakarma.com / doctor123</p>
-                  <p><strong>Patient:</strong> patient@example.com / patient123</p>
+                  <p><strong>Patient:</strong> patient33@gmail.com / patient123</p>
                 </div>
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
@@ -210,7 +210,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                   <div className="text-sm space-y-1">
                     <p><strong>Admin:</strong> admin@panchakarma.com / admin123</p>
                     <p><strong>Doctor:</strong> sharma@panchakarma.com / doctor123</p>
-                    <p><strong>Patient:</strong> patient@example.com / patient123</p>
+                    <p><strong>Patient:</strong> patient33@gmail.com / patient123</p>
                   </div>
                 </div>
               </CardContent>

@@ -3,6 +3,7 @@ import { projectId, publicAnonKey } from './supabase/info';
 
 // Construct Supabase URL from project ID
 const supabaseUrl = `https://${projectId}.supabase.co`;
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
 // Create Supabase client with optimized timeout settings
 export const supabase = createClient(supabaseUrl, publicAnonKey, {
@@ -10,8 +11,8 @@ export const supabase = createClient(supabaseUrl, publicAnonKey, {
     schema: 'public'
   },
   auth: {
-    autoRefreshToken: true,
-    persistSession: true,
+    autoRefreshToken: !isLocal,
+    persistSession: !isLocal,
     detectSessionInUrl: true
   },
   global: {

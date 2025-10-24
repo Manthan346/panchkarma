@@ -148,7 +148,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               <TabsTrigger value="feedback" className="text-xs sm:text-sm hidden sm:block">Feedback</TabsTrigger>
               <TabsTrigger value="analytics" className="text-xs sm:text-sm hidden sm:block">Analytics</TabsTrigger>
               <TabsTrigger value="notifications" className="text-xs sm:text-sm hidden sm:block">Notify</TabsTrigger>
-              <TabsTrigger value="settings" className="text-xs sm:text-sm hidden sm:block">Settings</TabsTrigger>
+              
             </TabsList>
             
             {/* Mobile More Options */}
@@ -327,16 +327,14 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           <TabsContent value="settings" className="space-y-6">
             <div className="space-y-6">
               {/* Database Health Check - PRIORITY #1 */}
-              <DatabaseHealthCheck />
-              
+            
               {/* Doctor Database Diagnostic - Check for orphaned records */}
-              <DoctorDatabaseDiagnostic />
-              
+             
               {/* Data Display Diagnostic - Check age/phone showing correctly */}
-              <DataDebugPanel />
+         
               
               {/* Connection Diagnostic Panel */}
-              <DiagnosticPanel />
+
               
               <Card>
                 <CardHeader>
