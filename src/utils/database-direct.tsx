@@ -346,6 +346,10 @@ export const notificationService = {
     return allNotifications.filter((notification: any) => notification.patient_id === patientId);
   },
 
+  async getAllNotifications() {
+    return await kvGetByPrefix('notification_');
+  },
+
   async createNotification(notificationData: any) {
     const id = generateId();
     const notification = {

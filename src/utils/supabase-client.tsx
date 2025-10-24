@@ -1,8 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
-import { projectId, publicAnonKey, supabaseUrl } from './supabase/info';
+import { projectId, publicAnonKey } from './supabase/info';
 
-// Create Supabase client
-export const supabase = createClient(supabaseUrl, publicAnonKey);
+// Construct Supabase URL from project ID
+const supabaseUrl = `https://${projectId}.supabase.co`;
+
+// Create Supabase client with optimized timeout settings
+export const supabase = createClient(supabaseUrl, publicAnonKey, {
+  db: {
+    schema: 'public'
+  },
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'panchakarma-pms'
+    }
+  },
+  // Optimize fetch settings
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
+  }
+});
 
 // Helper function to check connection
 export async function testSupabaseConnection() {

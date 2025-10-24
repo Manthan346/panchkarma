@@ -3,6 +3,7 @@ import { AuthPage } from './components/AuthPage';
 import { AdminDashboard } from './components/AdminDashboard';
 import { PatientDashboard } from './components/PatientDashboard';
 import { DoctorDashboard } from './components/DoctorDashboard';
+import { SupabaseDiagnostic } from './components/SupabaseDiagnostic';
 import { Toaster } from './components/ui/sonner';
 import { databaseService } from './utils/database-smart';
 import { supabase } from './utils/supabase-client';
@@ -103,6 +104,16 @@ export interface Feedback {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+
+  // Check URL for diagnostic mode
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('diagnostic') === 'true') {
+      setShowDiagnostic(true);
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Check Supabase session and fallback to localStorage
@@ -113,9 +124,19 @@ export default function App() {
         
         if (session?.user) {
           // User is logged in with Supabase
-          const userData = await databaseService.auth.getUserData(session.user.id);
-          setCurrentUser(userData);
-          localStorage.setItem('panchakarma_user', JSON.stringify(userData));
+          try {
+            const userData = await databaseService.auth.getUserData(session.user.id);
+            setCurrentUser(userData);
+            localStorage.setItem('panchakarma_user', JSON.stringify(userData));
+          } catch (error) {
+            // Supabase user not in our database, fall back to localStorage
+            console.log('Supabase user not found in database, using demo mode');
+            const savedUser = localStorage.getItem('panchakarma_user');
+            if (savedUser) {
+              const user = JSON.parse(savedUser);
+              setCurrentUser(user);
+            }
+          }
         } else {
           // Fallback to localStorage for demo mode
           const savedUser = localStorage.getItem('panchakarma_user');
@@ -158,13 +179,18 @@ export default function App() {
 
     // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const userData = await databaseService.auth.getUserData(session.user.id);
-        setCurrentUser(userData);
-        localStorage.setItem('panchakarma_user', JSON.stringify(userData));
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        localStorage.removeItem('panchakarma_user');
+      try {
+        if (event === 'SIGNED_IN' && session?.user) {
+          const userData = await databaseService.auth.getUserData(session.user.id);
+          setCurrentUser(userData);
+          localStorage.setItem('panchakarma_user', JSON.stringify(userData));
+        } else if (event === 'SIGNED_OUT') {
+          setCurrentUser(null);
+          localStorage.removeItem('panchakarma_user');
+        }
+      } catch (error) {
+        // Ignore errors from Supabase auth state changes in demo mode
+        console.log('Auth state change handled (demo mode):', error instanceof Error ? error.message : error);
       }
     });
 
@@ -197,6 +223,16 @@ export default function App() {
     localStorage.removeItem('panchakarma_user');
     toast.success('Logged out successfully');
   };
+
+  // Show diagnostic page if requested
+  if (showDiagnostic) {
+    return (
+      <>
+        <SupabaseDiagnostic />
+        <Toaster />
+      </>
+    );
+  }
 
   if (isLoading) {
     return (

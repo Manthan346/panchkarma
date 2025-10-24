@@ -207,7 +207,7 @@ export function PatientFeedback({ userId, userName }: PatientFeedbackProps) {
                           <SelectValue placeholder="Choose a completed session" />
                         </SelectTrigger>
                         <SelectContent>
-                          {sessionsNeedingFeedback.map(session => (
+                          {sessionsNeedingFeedback.filter(s => s.id && s.id.trim() !== '').map(session => (
                             <SelectItem key={session.id} value={session.id}>
                               {session.therapy_type} - {new Date(session.date).toLocaleDateString()}
                             </SelectItem>

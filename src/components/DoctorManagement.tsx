@@ -5,9 +5,9 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Plus, Search, Eye, Edit, Phone, Mail, GraduationCap, Briefcase, Loader2 } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Phone, Mail, Award, Briefcase, Loader2 } from 'lucide-react';
 import { Doctor } from '../App';
 import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
@@ -20,12 +20,34 @@ interface DoctorManagementProps {
 export function DoctorManagement({ doctors: externalDoctors, setDoctors: externalSetDoctors }: DoctorManagementProps = {}) {
   const [internalDoctors, setInternalDoctors] = useState<Doctor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
-  // Use external state if provided, otherwise use internal state
   const doctors = externalDoctors || internalDoctors;
   const setDoctors = externalSetDoctors || setInternalDoctors;
 
-  // Load doctors from database
+  const [newDoctor, setNewDoctor] = useState({
+    name: '',
+    email: '',
+    password: '',
+    phone: '',
+    specialization: '',
+    qualification: '',
+    experience: ''
+  });
+
+  const [editDoctor, setEditDoctor] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    specialization: '',
+    qualification: '',
+    experience: ''
+  });
+
   useEffect(() => {
     if (!externalDoctors) {
       loadDoctors();
@@ -37,130 +59,76 @@ export function DoctorManagement({ doctors: externalDoctors, setDoctors: externa
   const loadDoctors = async () => {
     try {
       setIsLoading(true);
-      const doctorsData = await databaseService.doctors.getDoctors();
-      setInternalDoctors(doctorsData);
-    } catch (error) {
+      const data = await databaseService.doctors.getDoctors();
+      setInternalDoctors(data);
+    } catch (error: any) {
       console.error('Failed to load doctors:', error);
-      toast.error('Failed to load doctors');
+      toast.error('Failed to load doctors: ' + error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const [isAddingDoctor, setIsAddingDoctor] = useState(false);
-  const [isEditingDoctor, setIsEditingDoctor] = useState(false);
-  const [showDoctorDetails, setShowDoctorDetails] = useState(false);
-  const [newDoctor, setNewDoctor] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    specialization: '',
-    qualification: '',
-    experience: ''
-  });
-  const [editDoctor, setEditDoctor] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    specialization: '',
-    qualification: '',
-    experience: ''
-  });
-
-  const filteredDoctors = doctors.filter(doctor =>
-    doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doctor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doctor.specialization.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Handle adding new doctor
   const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate form
-    if (!newDoctor.name || !newDoctor.email || !newDoctor.phone || !newDoctor.specialization) {
+    if (!newDoctor.name || !newDoctor.email || !newDoctor.password || !newDoctor.phone || !newDoctor.specialization) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    // Check if email already exists
-    if (doctors.some(d => d.email.toLowerCase() === newDoctor.email.toLowerCase())) {
-      toast.error('Doctor with this email already exists');
-      return;
-    }
-
     try {
-      // Create new doctor in database
-      const doctorData = {
+      const createdDoctor = await databaseService.doctors.createDoctor({
         name: newDoctor.name,
         email: newDoctor.email,
-        password: 'temp123', // Default password
+        password: newDoctor.password,
         phone: newDoctor.phone,
         specialization: newDoctor.specialization,
         qualification: newDoctor.qualification,
         experience: parseInt(newDoctor.experience) || 0
-      };
-
-      const createdDoctor = await databaseService.doctors.createDoctor(doctorData);
-
-      // Add to doctors list
-      setDoctors(prev => [...prev, createdDoctor]);
-      
-      // Reset form
-      setNewDoctor({
-        name: '',
-        email: '',
-        phone: '',
-        specialization: '',
-        qualification: '',
-        experience: ''
       });
-      
-      setIsAddingDoctor(false);
+
+      setDoctors(prev => [createdDoctor, ...prev]);
+      setNewDoctor({ name: '', email: '', password: '', phone: '', specialization: '', qualification: '', experience: '' });
+      setIsAddDialogOpen(false);
       toast.success(`Doctor ${newDoctor.name} added successfully`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create doctor:', error);
-      toast.error('Failed to create doctor');
+      toast.error('Failed to create doctor: ' + error.message);
     }
   };
 
-  // Handle editing doctor
   const handleEditDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedDoctor) return;
-
-    // Validate form
-    if (!editDoctor.name || !editDoctor.email || !editDoctor.phone || !editDoctor.specialization) {
+    if (!selectedDoctor || !editDoctor.name || !editDoctor.email || !editDoctor.phone || !editDoctor.specialization) {
       toast.error('Please fill in all required fields');
       return;
     }
 
     try {
-      // Update doctor in database
-      const updateData = {
+      const updated = await databaseService.doctors.updateDoctor(selectedDoctor.id, {
         name: editDoctor.name,
         email: editDoctor.email,
         phone: editDoctor.phone,
         specialization: editDoctor.specialization,
         qualification: editDoctor.qualification,
         experience: parseInt(editDoctor.experience) || 0
-      };
+      });
 
-      const updatedDoctor = await databaseService.doctors.updateDoctor(selectedDoctor.id, updateData);
-
-      // Update doctors list
-      setDoctors(prev => prev.map(d => d.id === selectedDoctor.id ? updatedDoctor : d));
-      
-      setIsEditingDoctor(false);
+      setDoctors(prev => prev.map(d => d.id === selectedDoctor.id ? updated : d));
+      setIsEditDialogOpen(false);
       setSelectedDoctor(null);
       toast.success(`Doctor ${editDoctor.name} updated successfully`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update doctor:', error);
-      toast.error('Failed to update doctor');
+      toast.error('Failed to update doctor: ' + error.message);
     }
+  };
+
+  const openViewDialog = (doctor: Doctor) => {
+    setSelectedDoctor(doctor);
+    setIsViewDialogOpen(true);
   };
 
   const openEditDialog = (doctor: Doctor) => {
@@ -173,261 +141,24 @@ export function DoctorManagement({ doctors: externalDoctors, setDoctors: externa
       qualification: doctor.qualification,
       experience: doctor.experience.toString()
     });
-    setIsEditingDoctor(true);
+    setIsEditDialogOpen(true);
   };
 
-  const openDetailsDialog = (doctor: Doctor) => {
-    setSelectedDoctor(doctor);
-    setShowDoctorDetails(true);
-  };
-
-  const DoctorDetailsDialog = ({ doctor }: { doctor: Doctor }) => (
-    <Dialog open={showDoctorDetails} onOpenChange={setShowDoctorDetails}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Doctor Details: {doctor.name}</DialogTitle>
-          <DialogDescription>
-            Complete doctor information and credentials
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-6">
-          {/* Personal Information */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h4 className="font-medium mb-3">Personal Information</h4>
-              <div className="space-y-2">
-                <div className="flex items-center text-sm">
-                  <Mail className="w-4 h-4 mr-2 text-muted-foreground" />
-                  {doctor.email}
-                </div>
-                <div className="flex items-center text-sm">
-                  <Phone className="w-4 h-4 mr-2 text-muted-foreground" />
-                  {doctor.phone}
-                </div>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-medium mb-3">Professional Details</h4>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Specialization:</span>
-                  <Badge variant="secondary">{doctor.specialization}</Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Experience:</span>
-                  <Badge variant="outline">{doctor.experience} years</Badge>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Qualification */}
-          <div>
-            <h4 className="font-medium mb-2">Qualifications</h4>
-            <div className="p-3 bg-muted rounded-lg text-sm flex items-start">
-              <GraduationCap className="w-4 h-4 mr-2 mt-0.5 text-muted-foreground" />
-              {doctor.qualification}
-            </div>
-          </div>
-
-          {/* Status */}
-          <div>
-            <h4 className="font-medium mb-2">Status</h4>
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                Doctor is active and available for appointments.
-              </p>
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+  const filteredDoctors = doctors.filter(doctor =>
+    doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doctor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doctor.specialization.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const AddDoctorDialog = () => (
-    <Dialog open={isAddingDoctor} onOpenChange={setIsAddingDoctor}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          Add New Doctor
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add New Doctor</DialogTitle>
-          <DialogDescription>
-            Enter doctor information to create a new account
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleAddDoctor} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Full Name *</Label>
-            <Input 
-              id="name" 
-              placeholder="Dr. Full Name" 
-              value={newDoctor.name}
-              onChange={(e) => setNewDoctor({...newDoctor, name: e.target.value})}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email *</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              placeholder="doctor@example.com"
-              value={newDoctor.email}
-              onChange={(e) => setNewDoctor({...newDoctor, email: e.target.value})}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone *</Label>
-            <Input 
-              id="phone" 
-              placeholder="Enter phone number"
-              value={newDoctor.phone}
-              onChange={(e) => setNewDoctor({...newDoctor, phone: e.target.value})}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="specialization">Specialization *</Label>
-            <Input 
-              id="specialization" 
-              placeholder="e.g., Panchakarma Specialist"
-              value={newDoctor.specialization}
-              onChange={(e) => setNewDoctor({...newDoctor, specialization: e.target.value})}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="qualification">Qualification</Label>
-            <Textarea 
-              id="qualification" 
-              placeholder="Enter qualifications and degrees"
-              value={newDoctor.qualification}
-              onChange={(e) => setNewDoctor({...newDoctor, qualification: e.target.value})}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="experience">Years of Experience</Label>
-            <Input 
-              id="experience" 
-              type="number" 
-              placeholder="Years"
-              value={newDoctor.experience}
-              onChange={(e) => setNewDoctor({...newDoctor, experience: e.target.value})}
-              min="0"
-              max="50"
-            />
-          </div>
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" type="button" onClick={() => {
-              setIsAddingDoctor(false);
-              setNewDoctor({
-                name: '',
-                email: '',
-                phone: '',
-                specialization: '',
-                qualification: '',
-                experience: ''
-              });
-            }}>
-              Cancel
-            </Button>
-            <Button type="submit">Add Doctor</Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-
-  const EditDoctorDialog = () => (
-    <Dialog open={isEditingDoctor} onOpenChange={setIsEditingDoctor}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit Doctor</DialogTitle>
-          <DialogDescription>
-            Update doctor information
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleEditDoctor} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-name">Full Name *</Label>
-            <Input 
-              id="edit-name" 
-              placeholder="Dr. Full Name" 
-              value={editDoctor.name}
-              onChange={(e) => setEditDoctor({...editDoctor, name: e.target.value})}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-email">Email *</Label>
-            <Input 
-              id="edit-email" 
-              type="email" 
-              placeholder="doctor@example.com"
-              value={editDoctor.email}
-              onChange={(e) => setEditDoctor({...editDoctor, email: e.target.value})}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-phone">Phone *</Label>
-            <Input 
-              id="edit-phone" 
-              placeholder="Enter phone number"
-              value={editDoctor.phone}
-              onChange={(e) => setEditDoctor({...editDoctor, phone: e.target.value})}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-specialization">Specialization *</Label>
-            <Input 
-              id="edit-specialization" 
-              placeholder="e.g., Panchakarma Specialist"
-              value={editDoctor.specialization}
-              onChange={(e) => setEditDoctor({...editDoctor, specialization: e.target.value})}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-qualification">Qualification</Label>
-            <Textarea 
-              id="edit-qualification" 
-              placeholder="Enter qualifications and degrees"
-              value={editDoctor.qualification}
-              onChange={(e) => setEditDoctor({...editDoctor, qualification: e.target.value})}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-experience">Years of Experience</Label>
-            <Input 
-              id="edit-experience" 
-              type="number" 
-              placeholder="Years"
-              value={editDoctor.experience}
-              onChange={(e) => setEditDoctor({...editDoctor, experience: e.target.value})}
-              min="0"
-              max="50"
-            />
-          </div>
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" type="button" onClick={() => {
-              setIsEditingDoctor(false);
-              setSelectedDoctor(null);
-            }}>
-              Cancel
-            </Button>
-            <Button type="submit">Update Doctor</Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -436,15 +167,15 @@ export function DoctorManagement({ doctors: externalDoctors, setDoctors: externa
           <div className="flex justify-between items-center">
             <div>
               <CardTitle>Doctor Management</CardTitle>
-              <CardDescription>
-                Manage doctor records, view credentials, and add new doctors
-              </CardDescription>
+              <CardDescription>Manage doctor profiles and information</CardDescription>
             </div>
-            <AddDoctorDialog />
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Doctor
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {/* Search */}
           <div className="flex items-center space-x-2 mb-6">
             <Search className="w-4 h-4 text-muted-foreground" />
             <Input
@@ -455,7 +186,6 @@ export function DoctorManagement({ doctors: externalDoctors, setDoctors: externa
             />
           </div>
 
-          {/* Doctors Table */}
           <div className="border rounded-lg">
             <Table>
               <TableHeader>
@@ -464,77 +194,58 @@ export function DoctorManagement({ doctors: externalDoctors, setDoctors: externa
                   <TableHead>Contact</TableHead>
                   <TableHead>Specialization</TableHead>
                   <TableHead>Experience</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {filteredDoctors.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      <div className="flex items-center justify-center space-x-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Loading doctors...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredDoctors.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={5} className="text-center py-8">
                       <p className="text-muted-foreground">No doctors found</p>
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredDoctors.map((doctor) => (
-                  <TableRow key={doctor.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">Dr. {doctor.name}</p>
-                        <p className="text-sm text-muted-foreground">ID: {doctor.id}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="text-sm">{doctor.email}</p>
-                        <p className="text-sm text-muted-foreground">{doctor.phone}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {doctor.specialization}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {doctor.experience} years
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        Active
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => openDetailsDialog(doctor)}
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          View
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => openEditDialog(doctor)}
-                        >
-                          <Edit className="w-4 h-4 mr-1" />
-                          Edit
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                    <TableRow key={doctor.id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Award className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{doctor.name}</p>
+                            <p className="text-sm text-muted-foreground">{doctor.email}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center text-sm">
+                          <Phone className="w-3 h-3 mr-2 text-muted-foreground" />
+                          {doctor.phone || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{doctor.specialization}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center text-sm">
+                          <Briefcase className="w-3 h-3 mr-2 text-muted-foreground" />
+                          {doctor.experience} years
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button variant="outline" size="sm" onClick={() => openViewDialog(doctor)}>
+                            <Eye className="w-4 h-4 mr-1" />
+                            View
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => openEditDialog(doctor)}>
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
               </TableBody>
@@ -543,11 +254,213 @@ export function DoctorManagement({ doctors: externalDoctors, setDoctors: externa
         </CardContent>
       </Card>
 
-      {/* Dialogs */}
-      {selectedDoctor && showDoctorDetails && (
-        <DoctorDetailsDialog doctor={selectedDoctor} />
-      )}
-      <EditDoctorDialog />
+      {/* View Doctor Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Doctor Details: {selectedDoctor?.name}</DialogTitle>
+            <DialogDescription>Complete doctor information</DialogDescription>
+          </DialogHeader>
+          {selectedDoctor && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Email</Label>
+                    <div className="flex items-center mt-1">
+                      <Mail className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <span>{selectedDoctor.email}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
+                    <div className="flex items-center mt-1">
+                      <Phone className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <span>{selectedDoctor.phone}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Specialization</Label>
+                    <div className="mt-1">
+                      <Badge variant="secondary">{selectedDoctor.specialization}</Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Qualification</Label>
+                    <div className="flex items-center mt-1">
+                      <Award className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <span>{selectedDoctor.qualification || 'Not provided'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Experience</Label>
+                    <div className="flex items-center mt-1">
+                      <Briefcase className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <span>{selectedDoctor.experience} years</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Doctor Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Doctor</DialogTitle>
+            <DialogDescription>Update doctor information</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditDoctor} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Full Name *</Label>
+              <Input 
+                id="edit-name" 
+                value={editDoctor.name}
+                onChange={(e) => setEditDoctor({...editDoctor, name: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email *</Label>
+              <Input 
+                id="edit-email" 
+                type="email" 
+                value={editDoctor.email}
+                onChange={(e) => setEditDoctor({...editDoctor, email: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Phone *</Label>
+              <Input 
+                id="edit-phone" 
+                value={editDoctor.phone}
+                onChange={(e) => setEditDoctor({...editDoctor, phone: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-specialization">Specialization *</Label>
+              <Input 
+                id="edit-specialization" 
+                value={editDoctor.specialization}
+                onChange={(e) => setEditDoctor({...editDoctor, specialization: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-qualification">Qualification</Label>
+              <Input 
+                id="edit-qualification" 
+                value={editDoctor.qualification}
+                onChange={(e) => setEditDoctor({...editDoctor, qualification: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-experience">Experience (years)</Label>
+              <Input 
+                id="edit-experience" 
+                type="number" 
+                value={editDoctor.experience}
+                onChange={(e) => setEditDoctor({...editDoctor, experience: e.target.value})}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" type="button" onClick={() => setIsEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Update Doctor</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Doctor Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Doctor</DialogTitle>
+            <DialogDescription>Create a new doctor account</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddDoctor} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name *</Label>
+              <Input 
+                id="name" 
+                value={newDoctor.name}
+                onChange={(e) => setNewDoctor({...newDoctor, name: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input 
+                id="email" 
+                type="email" 
+                value={newDoctor.email}
+                onChange={(e) => setNewDoctor({...newDoctor, email: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password *</Label>
+              <Input 
+                id="password" 
+                type="password" 
+                value={newDoctor.password}
+                onChange={(e) => setNewDoctor({...newDoctor, password: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone *</Label>
+              <Input 
+                id="phone" 
+                value={newDoctor.phone}
+                onChange={(e) => setNewDoctor({...newDoctor, phone: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="specialization">Specialization *</Label>
+              <Input 
+                id="specialization" 
+                value={newDoctor.specialization}
+                onChange={(e) => setNewDoctor({...newDoctor, specialization: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qualification">Qualification</Label>
+              <Input 
+                id="qualification" 
+                value={newDoctor.qualification}
+                onChange={(e) => setNewDoctor({...newDoctor, qualification: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="experience">Experience (years)</Label>
+              <Input 
+                id="experience" 
+                type="number" 
+                value={newDoctor.experience}
+                onChange={(e) => setNewDoctor({...newDoctor, experience: e.target.value})}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" type="button" onClick={() => setIsAddDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Add Doctor</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

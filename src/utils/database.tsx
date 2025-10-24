@@ -300,6 +300,57 @@ export const authService = {
     }
     return { ...user };
   },
+
+  async getUserData(userId: string) {
+    const user = demoUsers.find(u => u.id === userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return { ...user };
+  },
+
+  async signUp(email: string, password: string, userData: any) {
+    // Check if user already exists
+    const existing = demoUsers.find(u => u.email === email);
+    if (existing) {
+      throw new Error('User already exists');
+    }
+    
+    const newUser = {
+      id: generateId(),
+      email,
+      password,
+      ...userData,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoUsers.push(newUser);
+    return { ...newUser };
+  },
+
+  async signIn(email: string, password: string) {
+    return await this.login(email, password);
+  },
+
+  async signOut() {
+    // Demo logout - just return success
+    return { success: true };
+  },
+
+  async getCurrentUser() {
+    // In demo mode, return null (user must login)
+    return null;
+  },
+
+  async updatePassword(userId: string, newPassword: string) {
+    const userIndex = demoUsers.findIndex(u => u.id === userId);
+    if (userIndex === -1) {
+      throw new Error('User not found');
+    }
+    demoUsers[userIndex].password = newPassword;
+    demoUsers[userIndex].updated_at = new Date().toISOString();
+    return { success: true };
+  },
 };
 
 // Users service
@@ -466,6 +517,10 @@ export const progressService = {
 export const notificationService = {
   async getPatientNotifications(patientId: string) {
     return demoNotifications.filter(n => n.patient_id === patientId);
+  },
+
+  async getAllNotifications() {
+    return [...demoNotifications];
   },
 
   async createNotification(notificationData: any) {

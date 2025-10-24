@@ -99,14 +99,14 @@ export function DiagnosticPanel() {
 
     // Test 4: Fetch sample data
     try {
-      const users = await databaseService.users.getUsers();
+      const users = await databaseService.users.getAllUsers();
       diagnosticResults.tests.push({
         name: 'Data Fetching',
         status: 'pass',
         message: `Successfully fetched ${users?.length || 0} users`,
         details: {
           userCount: users?.length || 0,
-          sampleUser: users?.[0]?.name || 'N/A'
+          sampleUser: users?.[0]?.full_name || 'N/A'
         }
       });
     } catch (error: any) {

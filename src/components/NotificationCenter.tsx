@@ -13,6 +13,7 @@ import { Bell, Send, Settings, Plus, Mail, MessageSquare, Smartphone, Clock, Loa
 import { Notification } from '../App';
 import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
+import { emailService } from '../utils/email-service';
 
 export function NotificationCenter() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -30,8 +31,8 @@ export function NotificationCenter() {
     try {
       setIsLoading(true);
       const [notificationsData, patientsData] = await Promise.all([
-        // For now, get notifications for the first patient as a demo
-        databaseService.notifications.getPatientNotifications('2'),
+        // Get all notifications for admin view
+        databaseService.notifications.getAllNotifications(),
         databaseService.patients.getPatients()
       ]);
       setNotifications(notificationsData);
@@ -80,42 +81,73 @@ export function NotificationCenter() {
     }
 
     try {
-      // For demo purposes, send to patient with ID '2'
-      const notificationData = {
-        patient_id: '2',
-        type: notificationForm.type,
-        title: notificationForm.title,
-        message: notificationForm.message,
-        date: new Date().toISOString().split('T')[0],
-        read: false,
-        urgent: notificationForm.urgent
-      };
+      // Determine which patients to notify
+      const recipientPatients = notificationForm.recipients === 'all' 
+        ? patients 
+        : patients.filter(p => p.id === notificationForm.recipients);
 
-      const newNotification = await databaseService.notifications.createNotification(notificationData);
-      setNotifications(prev => [newNotification, ...prev]);
-      
-      // Reset form
-      setNotificationForm({
-        type: 'reminder',
-        title: '',
-        message: '',
-        recipients: 'all',
-        urgent: false,
-        channels: {
-          inApp: true,
-          email: false,
-          sms: false
+      let successCount = 0;
+      let emailsSent = 0;
+
+      // Send notification to each recipient
+      for (const patient of recipientPatients) {
+        try {
+          // Create in-app notification
+          if (notificationForm.channels.inApp) {
+            const notificationData = {
+              patient_id: patient.id,
+              type: notificationForm.type,
+              title: notificationForm.title,
+              message: notificationForm.message,
+              date: new Date().toISOString().split('T')[0],
+              read: false,
+              urgent: notificationForm.urgent
+            };
+
+            const newNotification = await databaseService.notifications.createNotification(notificationData);
+            setNotifications(prev => [newNotification, ...prev]);
+          }
+
+          // Send email notification
+          if (notificationForm.channels.email && patient.email) {
+            await emailService.sendNotificationEmail({
+              patientName: patient.name,
+              patientEmail: patient.email,
+              title: notificationForm.title,
+              message: notificationForm.message,
+              urgent: notificationForm.urgent
+            });
+            emailsSent++;
+          }
+
+          // SMS would be implemented here with Twilio or similar
+          if (notificationForm.channels.sms) {
+            console.log(`📱 SMS would be sent to ${patient.phone || 'no phone number'}`);
+          }
+
+          successCount++;
+        } catch (patientError) {
+          console.error(`Failed to notify patient ${patient.name}:`, patientError);
         }
-      });
+      }
       
+      // Reset form and close dialog
+      resetNotificationForm();
       setIsCreatingNotification(false);
       
+      // Build success message
       const channels = [];
       if (notificationForm.channels.inApp) channels.push('In-App');
-      if (notificationForm.channels.email) channels.push('Email');
+      if (notificationForm.channels.email) channels.push(`Email (${emailsSent} sent)`);
       if (notificationForm.channels.sms) channels.push('SMS');
       
-      toast.success(`Notification sent via ${channels.join(', ')} to ${notificationForm.recipients === 'all' ? 'all patients' : notificationForm.recipients + ' patients'}`);
+      const recipientText = notificationForm.recipients === 'all' 
+        ? `all ${recipientPatients.length} patients` 
+        : '1 patient';
+      
+      toast.success(`Notification sent successfully!`, {
+        description: `Delivered via ${channels.join(', ')} to ${recipientText}`
+      });
     } catch (error) {
       console.error('Failed to create notification:', error);
       toast.error('Failed to send notification');
@@ -136,166 +168,21 @@ export function NotificationCenter() {
     }
   };
 
-  const CreateNotificationDialog = () => (
-    <Dialog open={isCreatingNotification} onOpenChange={setIsCreatingNotification}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          Create Notification
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Create New Notification</DialogTitle>
-          <DialogDescription>
-            Send notifications to patients about appointments, reminders, or updates
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleCreateNotification} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="type">Notification Type</Label>
-            <Select 
-              value={notificationForm.type} 
-              onValueChange={(value) => setNotificationForm({...notificationForm, type: value})}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pre-procedure">Pre-Procedure</SelectItem>
-                <SelectItem value="post-procedure">Post-Procedure</SelectItem>
-                <SelectItem value="appointment">Appointment</SelectItem>
-                <SelectItem value="reminder">General Reminder</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="title">Title *</Label>
-            <Input
-              id="title"
-              placeholder="Enter notification title"
-              value={notificationForm.title}
-              onChange={(e) => setNotificationForm({...notificationForm, title: e.target.value})}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="message">Message *</Label>
-            <Textarea
-              id="message"
-              placeholder="Enter notification message"
-              value={notificationForm.message}
-              onChange={(e) => setNotificationForm({...notificationForm, message: e.target.value})}
-              rows={3}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="recipients">Recipients</Label>
-            <Select 
-              value={notificationForm.recipients} 
-              onValueChange={(value) => setNotificationForm({...notificationForm, recipients: value})}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Patients</SelectItem>
-                <SelectItem value="active">Active Patients Only</SelectItem>
-                <SelectItem value="specific">Specific Patient</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-3">
-            <Label>Delivery Channels *</Label>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Bell className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm">In-App Notification</span>
-                </div>
-                <Switch
-                  checked={notificationForm.channels.inApp}
-                  onCheckedChange={(checked) => 
-                    setNotificationForm({
-                      ...notificationForm, 
-                      channels: {...notificationForm.channels, inApp: checked}
-                    })
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Mail className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm">Email</span>
-                </div>
-                <Switch
-                  checked={notificationForm.channels.email}
-                  onCheckedChange={(checked) => 
-                    setNotificationForm({
-                      ...notificationForm, 
-                      channels: {...notificationForm.channels, email: checked}
-                    })
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Smartphone className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm">SMS</span>
-                </div>
-                <Switch
-                  checked={notificationForm.channels.sms}
-                  onCheckedChange={(checked) => 
-                    setNotificationForm({
-                      ...notificationForm, 
-                      channels: {...notificationForm.channels, sms: checked}
-                    })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch
-              checked={notificationForm.urgent}
-              onCheckedChange={(checked) => setNotificationForm({...notificationForm, urgent: checked})}
-            />
-            <Label htmlFor="urgent">Mark as Urgent</Label>
-          </div>
-
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" type="button" onClick={() => {
-              setIsCreatingNotification(false);
-              setNotificationForm({
-                type: 'reminder',
-                title: '',
-                message: '',
-                recipients: 'all',
-                urgent: false,
-                channels: {
-                  inApp: true,
-                  email: false,
-                  sms: false
-                }
-              });
-            }}>
-              Cancel
-            </Button>
-            <Button type="submit">
-              <Send className="w-4 h-4 mr-2" />
-              Send Notification
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+  // Reset form function
+  const resetNotificationForm = () => {
+    setNotificationForm({
+      type: 'reminder',
+      title: '',
+      message: '',
+      recipients: 'all',
+      urgent: false,
+      channels: {
+        inApp: true,
+        email: false,
+        sms: false
+      }
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -356,7 +243,192 @@ export function NotificationCenter() {
                 Manage patient notifications and automated alerts
               </CardDescription>
             </div>
-            <CreateNotificationDialog />
+            <Dialog open={isCreatingNotification} onOpenChange={(open) => {
+              setIsCreatingNotification(open);
+              if (!open) resetNotificationForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Notification
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Create New Notification</DialogTitle>
+                  <DialogDescription>
+                    Send notifications to patients about appointments, reminders, or updates
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreateNotification} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Notification Type</Label>
+                    <Select 
+                      value={notificationForm.type} 
+                      onValueChange={(value) => setNotificationForm({...notificationForm, type: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pre-procedure">Pre-Procedure</SelectItem>
+                        <SelectItem value="post-procedure">Post-Procedure</SelectItem>
+                        <SelectItem value="appointment">Appointment</SelectItem>
+                        <SelectItem value="reminder">General Reminder</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Title *</Label>
+                    <Input
+                      id="title"
+                      placeholder="Enter notification title"
+                      value={notificationForm.title}
+                      onChange={(e) => setNotificationForm({...notificationForm, title: e.target.value})}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="message">Message *</Label>
+                    <Textarea
+                      id="message"
+                      placeholder="Enter notification message"
+                      value={notificationForm.message}
+                      onChange={(e) => setNotificationForm({...notificationForm, message: e.target.value})}
+                      rows={3}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="recipients">Recipients</Label>
+                    <Select 
+                      value={notificationForm.recipients === 'all' || notificationForm.recipients === 'active' || notificationForm.recipients === 'specific' ? notificationForm.recipients : 'specific'} 
+                      onValueChange={(value) => {
+                        // Reset to default when switching modes
+                        if (value === 'all' || value === 'active' || value === 'specific') {
+                          setNotificationForm({...notificationForm, recipients: value});
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Patients</SelectItem>
+                        <SelectItem value="active">Active Patients Only</SelectItem>
+                        <SelectItem value="specific">Specific Patient</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Show patient selector when "specific" is selected */}
+                  {notificationForm.recipients === 'specific' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="specific-patient">Select Patient *</Label>
+                      <Select 
+                        value="" 
+                        onValueChange={(value) => {
+                          // Keep recipients as the selected patient ID
+                          setNotificationForm({...notificationForm, recipients: value});
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a patient" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {patients.length > 0 ? (
+                            patients.filter(p => p.id && p.id.trim() !== '').map(patient => (
+                              <SelectItem key={patient.id} value={patient.id}>
+                                {patient.name} ({patient.email})
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="no-patients" disabled>No patients available</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {notificationForm.recipients !== 'specific' && (
+                        <p className="text-sm text-muted-foreground">
+                          Selected: {patients.find(p => p.id === notificationForm.recipients)?.name}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <Label>Delivery Channels *</Label>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Bell className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm">In-App Notification</span>
+                        </div>
+                        <Switch
+                          checked={notificationForm.channels.inApp}
+                          onCheckedChange={(checked) => 
+                            setNotificationForm({
+                              ...notificationForm, 
+                              channels: {...notificationForm.channels, inApp: checked}
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Mail className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm">Email</span>
+                        </div>
+                        <Switch
+                          checked={notificationForm.channels.email}
+                          onCheckedChange={(checked) => 
+                            setNotificationForm({
+                              ...notificationForm, 
+                              channels: {...notificationForm.channels, email: checked}
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Smartphone className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm">SMS</span>
+                        </div>
+                        <Switch
+                          checked={notificationForm.channels.sms}
+                          onCheckedChange={(checked) => 
+                            setNotificationForm({
+                              ...notificationForm, 
+                              channels: {...notificationForm.channels, sms: checked}
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={notificationForm.urgent}
+                      onCheckedChange={(checked) => setNotificationForm({...notificationForm, urgent: checked})}
+                    />
+                    <Label htmlFor="urgent">Mark as Urgent</Label>
+                  </div>
+
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" type="button" onClick={() => setIsCreatingNotification(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit">
+                      <Send className="w-4 h-4 mr-2" />
+                      Send Notification
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent>

@@ -9,10 +9,13 @@ import { Badge } from './ui/badge';
 import { Calendar } from './ui/calendar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Plus, Clock, User, Calendar as CalendarIcon, Edit, Trash2, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Switch } from './ui/switch';
+import { Plus, Clock, User, Calendar as CalendarIcon, Edit, Trash2, CheckCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { TherapySession, Doctor } from '../App';
 import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
+import { schedulingSettings, SchedulingSettings } from '../utils/scheduling-settings';
+import { emailService } from '../utils/email-service';
 
 interface TherapySchedulingProps {
   doctors?: Doctor[];
@@ -28,14 +31,16 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
   const [practitioners, setPractitioners] = useState<string[]>([]);
   const [internalDoctors, setInternalDoctors] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [settings, setSettings] = useState<SchedulingSettings>(schedulingSettings.getSettings());
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   
   // Use external doctors if provided, otherwise use internal state
   const doctors = externalDoctors || internalDoctors;
 
-  // Load data from database
+  // Load data from database - only on initial mount
   useEffect(() => {
     loadData();
-  }, [externalDoctors]); // Reload when external doctors change
+  }, []); // Only run once on mount
 
   const loadData = async () => {
     try {
@@ -48,6 +53,14 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
         externalDoctors ? Promise.resolve(externalDoctors) : databaseService.doctors.getDoctors(),
         databaseService.referenceData.getPractitioners()
       ]);
+
+      console.log('📅 Therapy Scheduling Data Loaded:', {
+        sessions: sessionsData.length,
+        patients: patientsData.length,
+        therapyTypes: therapyTypesData.length,
+        doctors: doctorsData.length,
+        practitioners: practitionersData.length
+      });
 
       setSessions(sessionsData);
       setPatients(patientsData);
@@ -63,8 +76,10 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
       const allPractitioners = [...new Set([...doctorNames, ...practitionersData])];
       setPractitioners(allPractitioners);
     } catch (error) {
-      console.error('Failed to load data:', error);
-      toast.error('Failed to load scheduling data');
+      console.error('❌ Failed to load scheduling data:', error);
+      toast.error('Failed to load scheduling data', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -80,6 +95,25 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
     doctorId: '',
     notes: ''
   });
+
+  // Recalculate available slots when doctor changes
+  useEffect(() => {
+    if (scheduleForm.date && scheduleForm.doctorId) {
+      const slots = schedulingSettings.getAvailableTimeSlots(
+        scheduleForm.date,
+        sessions.map(s => ({ 
+          date: s.date, 
+          time: s.time, 
+          duration: s.duration,
+          doctor_id: s.doctor_id,
+          practitioner: s.practitioner
+        })),
+        scheduleForm.duration,
+        scheduleForm.doctorId // Filter slots for this specific doctor
+      );
+      setAvailableSlots(slots);
+    }
+  }, [scheduleForm.doctorId, scheduleForm.date, scheduleForm.duration, sessions]);
 
   const getSessionsForDate = (date: Date | undefined) => {
     if (!date) return [];
@@ -115,6 +149,12 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
     }
 
     try {
+      const patient = patients.find(p => p.id === scheduleForm.patientId);
+      if (!patient) {
+        toast.error('Patient not found');
+        return;
+      }
+
       // Create new session in database
       const sessionData = {
         patient_id: scheduleForm.patientId,
@@ -135,27 +175,81 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
       // Add to sessions
       setSessions(prev => [...prev, newSession]);
       
+      // Send confirmation email if auto-confirmation is enabled
+      if (settings.autoConfirmation) {
+        try {
+          await emailService.sendAppointmentConfirmation({
+            patientName: patient.name,
+            patientEmail: patient.email,
+            therapyType: scheduleForm.therapyType,
+            date: scheduleForm.date,
+            time: scheduleForm.time,
+            duration: scheduleForm.duration,
+            practitioner: scheduleForm.practitioner,
+            preInstructions: sessionData.pre_procedure_instructions,
+            postInstructions: sessionData.post_procedure_instructions
+          });
+          
+          // Create automatic reminder notification if enabled
+          if (settings.autoReminders) {
+            const notificationTime = schedulingSettings.getNotificationTime(scheduleForm.date, scheduleForm.time);
+            console.log(`📅 Reminder scheduled for: ${notificationTime.toLocaleString()}`);
+            toast.success('Reminder scheduled', {
+              description: `Patient will be notified ${settings.notificationLeadTime} hours before appointment`
+            });
+          }
+        } catch (emailError) {
+          console.error('Failed to send confirmation email:', emailError);
+          // Don't fail the entire operation if email fails
+        }
+      }
+      
       // Show success message
-      const patient = patients.find(p => p.id === scheduleForm.patientId);
-      toast.success(`Session scheduled successfully for ${patient?.name} on ${scheduleForm.date} at ${scheduleForm.time}`);
+      toast.success(`Session scheduled successfully for ${patient?.name}`, {
+        description: `${scheduleForm.date} at ${scheduleForm.time}`
+      });
       
       // Reset form and close dialog
       resetForm();
       setIsSchedulingNew(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to schedule session:', error);
-      toast.error('Failed to schedule session');
+      toast.error('Failed to schedule session', {
+        description: error?.message || 'Please check all fields and try again'
+      });
     }
   };
 
   const handleCancelSession = async (sessionId: string) => {
     try {
+      const session = sessions.find(s => s.id === sessionId);
+      if (!session) return;
+
       await databaseService.therapySessions.updateTherapySession(sessionId, { status: 'cancelled' });
-      setSessions(prev => prev.map(session => 
-        session.id === sessionId 
-          ? { ...session, status: 'cancelled' as const }
-          : session
+      setSessions(prev => prev.map(s => 
+        s.id === sessionId 
+          ? { ...s, status: 'cancelled' as const }
+          : s
       ));
+
+      // Send cancellation email
+      const patient = patients.find(p => p.id === session.patient_id);
+      if (patient && settings.autoConfirmation) {
+        try {
+          await emailService.sendAppointmentCancellation({
+            patientName: patient.name,
+            patientEmail: patient.email,
+            therapyType: session.therapy_type,
+            date: session.date,
+            time: session.time,
+            duration: session.duration,
+            practitioner: session.practitioner
+          });
+        } catch (emailError) {
+          console.error('Failed to send cancellation email:', emailError);
+        }
+      }
+
       toast.success('Session cancelled successfully');
     } catch (error) {
       console.error('Failed to cancel session:', error);
@@ -203,21 +297,32 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
   };
 
   const ScheduleNewSessionDialog = () => (
-    <Dialog open={isSchedulingNew} onOpenChange={setIsSchedulingNew}>
+    <Dialog open={isSchedulingNew} onOpenChange={(open) => {
+      setIsSchedulingNew(open);
+      if (!open) {
+        // Reset form and available slots when dialog closes
+        resetForm();
+        setAvailableSlots([]);
+      }
+    }}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="w-4 h-4 mr-2" />
           Schedule New Session
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Schedule New Therapy Session</DialogTitle>
           <DialogDescription>
             Create a new therapy appointment for a patient
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleScheduleSubmit} className="space-y-4">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleScheduleSubmit(e);
+        }} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="patient">Patient *</Label>
             <Select value={scheduleForm.patientId} onValueChange={(value) => 
@@ -227,11 +332,15 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
                 <SelectValue placeholder="Select a patient" />
               </SelectTrigger>
               <SelectContent>
-                {patients.map(patient => (
-                  <SelectItem key={patient.id} value={patient.id}>
-                    {patient.name} ({patient.email})
-                  </SelectItem>
-                ))}
+                {patients.length > 0 ? (
+                  patients.filter(p => p.id && p.id.trim() !== '').map(patient => (
+                    <SelectItem key={patient.id} value={patient.id}>
+                      {patient.name} ({patient.email})
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-patients" disabled>No patients available</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -240,21 +349,43 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
             <Label htmlFor="therapy">Therapy Type *</Label>
             <Select value={scheduleForm.therapyType} onValueChange={(value) => {
               const selectedTherapy = therapyTypes.find(t => t.name === value);
+              const newDuration = selectedTherapy?.duration || settings.defaultDuration;
               setScheduleForm({
                 ...scheduleForm, 
                 therapyType: value,
-                duration: selectedTherapy?.duration || 60
+                duration: newDuration
               });
+              
+              // Recalculate available slots with new duration
+              if (scheduleForm.date) {
+                const slots = schedulingSettings.getAvailableTimeSlots(
+                  scheduleForm.date,
+                  sessions.map(s => ({ 
+                    date: s.date, 
+                    time: s.time, 
+                    duration: s.duration,
+                    doctor_id: s.doctor_id,
+                    practitioner: s.practitioner
+                  })),
+                  newDuration,
+                  scheduleForm.doctorId // Filter by doctor if selected
+                );
+                setAvailableSlots(slots);
+              }
             }}>
               <SelectTrigger>
                 <SelectValue placeholder="Select therapy type" />
               </SelectTrigger>
               <SelectContent>
-                {therapyTypes.map(therapy => (
-                  <SelectItem key={therapy.name} value={therapy.name}>
-                    {therapy.name} ({therapy.duration}min)
-                  </SelectItem>
-                ))}
+                {therapyTypes.length > 0 ? (
+                  therapyTypes.filter(t => t.name && t.name.trim() !== '').map(therapy => (
+                    <SelectItem key={therapy.name} value={therapy.name}>
+                      {therapy.name} ({therapy.duration}min)
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-therapy-types" disabled>No therapy types available</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -267,17 +398,55 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
                 type="date"
                 value={scheduleForm.date}
                 min={new Date().toISOString().split('T')[0]}
-                onChange={(e) => setScheduleForm({...scheduleForm, date: e.target.value})}
+                onChange={(e) => {
+                  const newDate = e.target.value;
+                  setScheduleForm({...scheduleForm, date: newDate});
+                  
+                  // Calculate available slots for the selected date and doctor
+                  if (newDate && scheduleForm.duration) {
+                    const slots = schedulingSettings.getAvailableTimeSlots(
+                      newDate,
+                      sessions.map(s => ({ 
+                        date: s.date, 
+                        time: s.time, 
+                        duration: s.duration,
+                        doctor_id: s.doctor_id,
+                        practitioner: s.practitioner
+                      })),
+                      scheduleForm.duration,
+                      scheduleForm.doctorId // Filter by doctor if selected
+                    );
+                    setAvailableSlots(slots);
+                  }
+                }}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="time">Time *</Label>
-              <Input
-                id="time"
-                type="time"
-                value={scheduleForm.time}
-                onChange={(e) => setScheduleForm({...scheduleForm, time: e.target.value})}
-              />
+              <Select 
+                value={scheduleForm.time} 
+                onValueChange={(value) => setScheduleForm({...scheduleForm, time: value})}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select time slot" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSlots.length > 0 ? (
+                    availableSlots.filter(s => s && s.trim() !== '').map(slot => (
+                      <SelectItem key={slot} value={slot}>
+                        {slot}
+                      </SelectItem>
+                    ))
+                  ) : scheduleForm.date ? (
+                    <SelectItem value="no-slots" disabled>No slots available</SelectItem>
+                  ) : (
+                    <SelectItem value="select-date" disabled>Select a date first</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {availableSlots.length > 0 && `${availableSlots.length} slots available`}
+              </p>
             </div>
           </div>
 
@@ -286,28 +455,62 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
             <Select value={scheduleForm.practitioner} onValueChange={(value) => {
               // Check if this is a doctor (has ID in doctors array)
               const selectedDoctor = doctors.find(d => d.name === value);
+              const newDoctorId = selectedDoctor?.id || '';
+              
               setScheduleForm({
                 ...scheduleForm, 
                 practitioner: value,
-                doctorId: selectedDoctor?.id || ''
+                doctorId: newDoctorId
               });
+
+              // Recalculate available slots for the new doctor
+              if (scheduleForm.date) {
+                const slots = schedulingSettings.getAvailableTimeSlots(
+                  scheduleForm.date,
+                  sessions.map(s => ({ 
+                    date: s.date, 
+                    time: s.time, 
+                    duration: s.duration,
+                    doctor_id: s.doctor_id,
+                    practitioner: s.practitioner
+                  })),
+                  scheduleForm.duration,
+                  newDoctorId
+                );
+                setAvailableSlots(slots);
+                
+                // Clear the time selection if it's no longer available
+                if (scheduleForm.time && !slots.includes(scheduleForm.time)) {
+                  setScheduleForm(prev => ({ ...prev, time: '' }));
+                }
+              }
             }}>
               <SelectTrigger>
                 <SelectValue placeholder="Select doctor/practitioner" />
               </SelectTrigger>
               <SelectContent>
                 {/* Show doctors first */}
-                {doctors.map(doctor => (
-                  <SelectItem key={doctor.id} value={doctor.name}>
-                    {doctor.name} (Doctor - {doctor.specialization})
-                  </SelectItem>
-                ))}
+                {doctors && doctors.length > 0 ? (
+                  doctors.map(doctor => (
+                    <SelectItem key={doctor.id || doctor.name} value={doctor.name}>
+                      {doctor.name}{doctor.specialization ? ` (${doctor.specialization})` : ' (Doctor)'}
+                    </SelectItem>
+                  ))
+                ) : null}
+                
                 {/* Show other practitioners */}
-                {practitioners.filter(p => !doctors.some(d => d.name === p)).map(practitioner => (
-                  <SelectItem key={practitioner} value={practitioner}>
-                    {practitioner} (Practitioner)
-                  </SelectItem>
-                ))}
+                {practitioners && practitioners.length > 0 ? (
+                  practitioners.filter(p => p && p.trim() !== '' && !doctors.some(d => d.name === p)).map(practitioner => (
+                    <SelectItem key={practitioner} value={practitioner}>
+                      {practitioner}
+                    </SelectItem>
+                  ))
+                ) : null}
+                
+                {/* Fallback when no doctors or practitioners are available */}
+                {(!doctors || doctors.length === 0) && (!practitioners || practitioners.length === 0) && (
+                  <SelectItem value="no-practitioners" disabled>No doctors or practitioners available - Please add doctors first</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -497,66 +700,86 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {upcomingSessions.map((session) => {
-                      const patient = patients.find(p => p.id === session.patient_id);
-                      return (
-                        <TableRow key={session.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">
-                                {new Date(session.date).toLocaleDateString()}
-                              </p>
-                              <p className="text-sm text-muted-foreground">{session.time}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{patient?.name}</p>
-                              <p className="text-sm text-muted-foreground">{patient?.email}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{session.therapy_type}</TableCell>
-                          <TableCell>{session.practitioner}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {session.duration}min
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={
-                              session.status === 'completed' ? 'default' : 
-                              session.status === 'cancelled' ? 'destructive' : 'secondary'
-                            }>
-                              {session.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-1">
-                              {session.status === 'scheduled' && (
-                                <>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => handleCompleteSession(session.id)}
-                                  >
-                                    <CheckCircle className="w-3 h-3 mr-1" />
-                                    Complete
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => handleCancelSession(session.id)}
-                                  >
-                                    <Trash2 className="w-3 h-3 mr-1" />
-                                    Cancel
-                                  </Button>
-                                </>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8">
+                          <div className="flex items-center justify-center space-x-2">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                            <span>Loading sessions...</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : upcomingSessions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8">
+                          <div className="text-muted-foreground">
+                            <p className="font-medium">No upcoming sessions</p>
+                            <p className="text-sm mt-1">Click "Schedule New Session" to create one</p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      upcomingSessions.map((session) => {
+                        const patient = patients.find(p => p.id === session.patient_id);
+                        return (
+                          <TableRow key={session.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">
+                                  {new Date(session.date).toLocaleDateString()}
+                                </p>
+                                <p className="text-sm text-muted-foreground">{session.time}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{patient?.name || 'Unknown Patient'}</p>
+                                <p className="text-sm text-muted-foreground">{patient?.email || 'N/A'}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>{session.therapy_type}</TableCell>
+                            <TableCell>{session.practitioner}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {session.duration}min
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                session.status === 'completed' ? 'default' : 
+                                session.status === 'cancelled' ? 'destructive' : 'secondary'
+                              }>
+                                {session.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-1">
+                                {session.status === 'scheduled' && (
+                                  <>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => handleCompleteSession(session.id)}
+                                    >
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Complete
+                                    </Button>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => handleCancelSession(session.id)}
+                                    >
+                                      <Trash2 className="w-3 h-3 mr-1" />
+                                      Cancel
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -568,17 +791,31 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
       {/* Automated Scheduling Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>Automated Scheduling Settings</CardTitle>
-          <CardDescription>
-            Configure automatic therapy scheduling and notification preferences
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                Automated Scheduling Settings
+              </CardTitle>
+              <CardDescription>
+                Configure automatic therapy scheduling and notification preferences
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="gap-1">
+              <CheckCircle className="w-3 h-3" />
+              Active
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
                 <Label className="text-sm font-medium">Default Session Duration</Label>
-                <Select defaultValue="60">
+                <Select 
+                  value={String(settings.defaultDuration)}
+                  onValueChange={(value) => setSettings({...settings, defaultDuration: parseInt(value)})}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -590,10 +827,16 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
                     <SelectItem value="120">120 minutes</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  New sessions will default to this duration
+                </p>
               </div>
               <div>
                 <Label className="text-sm font-medium">Notification Lead Time</Label>
-                <Select defaultValue="24">
+                <Select 
+                  value={String(settings.notificationLeadTime)}
+                  onValueChange={(value) => setSettings({...settings, notificationLeadTime: parseInt(value)})}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -604,19 +847,48 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
                     <SelectItem value="48">48 hours before</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  When to send reminder emails to patients
+                </p>
+              </div>
+              <div className="flex items-center justify-between space-x-2 p-3 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">Auto Confirmation Emails</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Send email when appointment is scheduled
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.autoConfirmation}
+                  onCheckedChange={(checked) => setSettings({...settings, autoConfirmation: checked})}
+                />
               </div>
             </div>
             <div className="space-y-4">
               <div>
                 <Label className="text-sm font-medium">Working Hours</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input type="time" defaultValue="09:00" />
-                  <Input type="time" defaultValue="17:00" />
+                  <Input 
+                    type="time" 
+                    value={settings.workingHoursStart}
+                    onChange={(e) => setSettings({...settings, workingHoursStart: e.target.value})}
+                  />
+                  <Input 
+                    type="time" 
+                    value={settings.workingHoursEnd}
+                    onChange={(e) => setSettings({...settings, workingHoursEnd: e.target.value})}
+                  />
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Available appointment slots will be within these hours
+                </p>
               </div>
               <div>
                 <Label className="text-sm font-medium">Buffer Time Between Sessions</Label>
-                <Select defaultValue="15">
+                <Select 
+                  value={String(settings.bufferTime)}
+                  onValueChange={(value) => setSettings({...settings, bufferTime: parseInt(value)})}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -627,13 +899,68 @@ export function TherapyScheduling({ doctors: externalDoctors }: TherapySchedulin
                     <SelectItem value="45">45 minutes</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Time gap between consecutive appointments
+                </p>
+              </div>
+              <div className="flex items-center justify-between space-x-2 p-3 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">Auto Reminder Emails</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Send reminder before appointment
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.autoReminders}
+                  onCheckedChange={(checked) => setSettings({...settings, autoReminders: checked})}
+                />
               </div>
             </div>
           </div>
-          <div className="mt-6">
-            <Button onClick={() => toast.success('Settings saved successfully!')}>
+          
+          <div className="mt-6 flex gap-3">
+            <Button 
+              onClick={() => {
+                if (schedulingSettings.saveSettings(settings)) {
+                  toast.success('Settings saved successfully!', {
+                    description: 'Automated scheduling is now configured'
+                  });
+                } else {
+                  toast.error('Failed to save settings');
+                }
+              }}
+            >
               Save Settings
             </Button>
+            <Button 
+              variant="outline"
+              onClick={() => {
+                const defaultSettings = schedulingSettings.resetSettings();
+                setSettings(defaultSettings);
+                toast.info('Settings reset to defaults');
+              }}
+            >
+              Reset to Defaults
+            </Button>
+          </div>
+
+          {/* Info about automated features */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              Automated Features Active
+            </h4>
+            <ul className="text-sm text-blue-700 space-y-1">
+              {settings.autoConfirmation && (
+                <li>✅ Confirmation emails sent immediately when appointments are scheduled</li>
+              )}
+              {settings.autoReminders && (
+                <li>✅ Reminder emails sent {settings.notificationLeadTime} hours before appointments</li>
+              )}
+              <li>✅ Available time slots calculated automatically based on working hours</li>
+              <li>✅ Buffer time prevents back-to-back scheduling</li>
+              <li>✅ Default duration applied to new appointments</li>
+            </ul>
           </div>
         </CardContent>
       </Card>

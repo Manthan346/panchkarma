@@ -11,6 +11,7 @@ import { databaseService } from '../utils/database-smart';
 import { Navbar } from './Navbar';
 import { FeedbackManagement } from './FeedbackManagement';
 import { toast } from 'sonner@2.0.3';
+import { schedulingSettings } from '../utils/scheduling-settings';
 
 interface DoctorDashboardProps {
   user: User;
@@ -24,14 +25,17 @@ export function DoctorDashboard({ user, onLogout }: DoctorDashboardProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [showPatientDetails, setShowPatientDetails] = useState(false);
+  const [doctorId, setDoctorId] = useState<string>('');
+  const [allSessions, setAllSessions] = useState<TherapySession[]>([]); // All sessions for slot calculation
 
   useEffect(() => {
     const fetchDoctorData = async () => {
       try {
         setIsLoading(true);
         
-        // Fetch all therapy sessions
+        // Fetch all therapy sessions  
         const sessionsData = await databaseService.therapySessions.getTherapySessions();
+        setAllSessions(sessionsData); // Store all sessions for slot calculation
         
         // Fetch all doctors to get current user's doctor ID
         const doctorsData = await databaseService.doctors.getDoctors();
@@ -48,6 +52,12 @@ export function DoctorDashboard({ user, onLogout }: DoctorDashboardProps) {
             return session.practitioner === user.name;
           }
         );
+        
+        // Store current doctor ID for schedule management
+        if (currentDoctor) {
+          // @ts-ignore - Adding doctorId to state
+          setDoctorId(currentDoctor.id);
+        }
         setSessions(doctorSessions);
 
         // Fetch all patients

@@ -11,6 +11,8 @@ import { Calendar, Clock, User, MapPin, Phone, AlertCircle, CheckCircle, XCircle
 import { databaseService } from '../utils/database-smart';
 import { toast } from 'sonner@2.0.3';
 import { TherapySession } from '../App';
+import { schedulingSettings } from '../utils/scheduling-settings';
+import { DoctorLoadTest } from './DoctorLoadTest';
 
 interface PatientAppointmentsProps {
   userId: string;
@@ -38,6 +40,7 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
     doctor_id: '',
     duration: 60
   });
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
 
   useEffect(() => {
     loadData();
@@ -46,17 +49,22 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [sessionsData, therapyTypesData, practitionersData, doctorsData] = await Promise.all([
-        databaseService.therapySessions.getPatientTherapySessions(userId),
+      const [allSessionsData, therapyTypesData, practitionersData, doctorsData] = await Promise.all([
+        // Load ALL sessions for proper slot calculation (not just patient's sessions)
+        databaseService.therapySessions.getTherapySessions(),
         databaseService.referenceData.getTherapyTypes(),
         databaseService.referenceData.getPractitioners(),
         databaseService.doctors.getDoctors()
       ]);
 
-      setSessions(sessionsData);
+      setSessions(allSessionsData);
       setTherapyTypes(therapyTypesData);
       setPractitioners(practitionersData);
       setDoctors(doctorsData);
+      
+      // Debug log for doctors
+      console.log('PatientAppointments - Loaded doctors:', doctorsData);
+      console.log('PatientAppointments - Doctors count:', doctorsData?.length || 0);
     } catch (error) {
       console.error('Failed to load appointments data:', error);
       toast.error('Failed to load appointments');
@@ -341,6 +349,9 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
 
   return (
     <div className="space-y-6">
+      {/* Debug Component - Remove when fixed */}
+      <DoctorLoadTest />
+      
       {/* Quick Actions */}
       <Card>
         <CardHeader>
@@ -614,60 +625,157 @@ export function PatientAppointments({ userId }: PatientAppointmentsProps) {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="therapy-type">Therapy Type</Label>
-              <Select value={newBooking.therapy_type} onValueChange={(value) => setNewBooking({...newBooking, therapy_type: value})}>
+              <Label htmlFor="therapy-type">Therapy Type *</Label>
+              <Select value={newBooking.therapy_type} onValueChange={(value) => {
+                // Update therapy type and duration
+                const selectedTherapy = therapyTypes.find(t => t.name === value);
+                setNewBooking({
+                  ...newBooking, 
+                  therapy_type: value,
+                  duration: selectedTherapy?.duration || 60
+                });
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select therapy type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Abhyanga">Abhyanga (Oil Massage)</SelectItem>
-                  <SelectItem value="Shirodhara">Shirodhara</SelectItem>
-                  <SelectItem value="Panchakarma Detox">Panchakarma Detox</SelectItem>
-                  <SelectItem value="Udvartana">Udvartana (Herbal Scrub)</SelectItem>
-                  <SelectItem value="Kizhi">Kizhi (Herbal Poultice)</SelectItem>
-                  <SelectItem value="Nasya">Nasya (Nasal Therapy)</SelectItem>
+                  {therapyTypes.length > 0 ? (
+                    therapyTypes.filter(t => t.name && t.name.trim() !== '').map(therapy => (
+                      <SelectItem key={therapy.name} value={therapy.name}>
+                        {therapy.name} ({therapy.duration}min)
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="Abhyanga">Abhyanga (Oil Massage)</SelectItem>
+                      <SelectItem value="Shirodhara">Shirodhara</SelectItem>
+                      <SelectItem value="Panchakarma Detox">Panchakarma Detox</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="booking-date">Date</Label>
-              <Input
-                id="booking-date"
-                type="date"
-                value={newBooking.date}
-                onChange={(e) => setNewBooking({...newBooking, date: e.target.value})}
-                min={new Date().toISOString().split('T')[0]}
-              />
-            </div>
-            <div>
-              <Label htmlFor="booking-time">Time</Label>
-              <Select value={newBooking.time} onValueChange={(value) => setNewBooking({...newBooking, time: value})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select time" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="09:00">9:00 AM</SelectItem>
-                  <SelectItem value="10:00">10:00 AM</SelectItem>
-                  <SelectItem value="11:00">11:00 AM</SelectItem>
-                  <SelectItem value="14:00">2:00 PM</SelectItem>
-                  <SelectItem value="15:00">3:00 PM</SelectItem>
-                  <SelectItem value="16:00">4:00 PM</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="practitioner">Practitioner</Label>
-              <Select value={newBooking.practitioner} onValueChange={(value) => setNewBooking({...newBooking, practitioner: value})}>
+              <Label htmlFor="practitioner">Doctor/Practitioner *</Label>
+              <Select value={newBooking.practitioner} onValueChange={(value) => {
+                // Find if selected value is a doctor (to store doctor_id)
+                const selectedDoctor = doctors.find(d => d.name === value);
+                const newDoctorId = selectedDoctor?.id || '';
+                
+                setNewBooking({
+                  ...newBooking, 
+                  practitioner: value,
+                  doctor_id: newDoctorId
+                });
+
+                // Recalculate available slots for the new doctor
+                if (newBooking.date && newBooking.duration) {
+                  const allSessions = sessions.map(s => ({ 
+                    date: s.date, 
+                    time: s.time, 
+                    duration: s.duration,
+                    doctor_id: s.doctor_id,
+                    practitioner: s.practitioner
+                  }));
+                  const slots = schedulingSettings.getAvailableTimeSlots(
+                    newBooking.date,
+                    allSessions,
+                    newBooking.duration,
+                    newDoctorId
+                  );
+                  setAvailableSlots(slots);
+                  
+                  // Clear time if it's no longer available
+                  if (newBooking.time && !slots.includes(newBooking.time)) {
+                    setNewBooking(prev => ({ ...prev, time: '' }));
+                  }
+                }
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select practitioner" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Dr. Priya Sharma">Dr. Priya Sharma</SelectItem>
-                  <SelectItem value="Dr. Raj Patel">Dr. Raj Patel</SelectItem>
-                  <SelectItem value="Dr. Anita Desai">Dr. Anita Desai</SelectItem>
-                  <SelectItem value="Dr. Vikram Singh">Dr. Vikram Singh</SelectItem>
+                  {/* Show doctors first */}
+                  {doctors && doctors.length > 0 ? (
+                    doctors.map(doctor => (
+                      <SelectItem key={doctor.id || doctor.name} value={doctor.name}>
+                        {doctor.name}{doctor.specialization ? ` - ${doctor.specialization}` : ''}
+                      </SelectItem>
+                    ))
+                  ) : null}
+                  
+                  {/* Show practitioners */}
+                  {practitioners && practitioners.length > 0 ? (
+                    practitioners.filter(p => p && p.trim() !== '' && !doctors.some(d => d.name === p)).map(practitioner => (
+                      <SelectItem key={practitioner} value={practitioner}>
+                        {practitioner}
+                      </SelectItem>
+                    ))
+                  ) : null}
+                  
+                  {/* If no doctors or practitioners */}
+                  {(!doctors || doctors.length === 0) && (!practitioners || practitioners.length === 0) && (
+                    <SelectItem value="no-data" disabled>No practitioners available - Please contact admin</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label htmlFor="booking-date">Date *</Label>
+              <Input
+                id="booking-date"
+                type="date"
+                value={newBooking.date}
+                onChange={(e) => {
+                  const newDate = e.target.value;
+                  setNewBooking({...newBooking, date: newDate});
+                  
+                  // Calculate available slots for the selected date and doctor
+                  if (newDate && newBooking.duration && newBooking.doctor_id) {
+                    const allSessions = sessions.map(s => ({ 
+                      date: s.date, 
+                      time: s.time, 
+                      duration: s.duration,
+                      doctor_id: s.doctor_id,
+                      practitioner: s.practitioner
+                    }));
+                    const slots = schedulingSettings.getAvailableTimeSlots(
+                      newDate,
+                      allSessions,
+                      newBooking.duration,
+                      newBooking.doctor_id
+                    );
+                    setAvailableSlots(slots);
+                  }
+                }}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="booking-time">Time Slot *</Label>
+              <Select value={newBooking.time} onValueChange={(value) => setNewBooking({...newBooking, time: value})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select time slot" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSlots.length > 0 ? (
+                    availableSlots.filter(s => s && s.trim() !== '').map(slot => (
+                      <SelectItem key={slot} value={slot}>
+                        {slot}
+                      </SelectItem>
+                    ))
+                  ) : newBooking.date && newBooking.doctor_id ? (
+                    <SelectItem value="no-slots" disabled>No slots available for this doctor</SelectItem>
+                  ) : (
+                    <SelectItem value="select-doctor-date" disabled>Select doctor and date first</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {availableSlots.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {availableSlots.length} slots available for {newBooking.practitioner}
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="duration">Duration (minutes)</Label>

@@ -14,6 +14,9 @@ import { AdminAnalytics } from './AdminAnalytics';
 import { NotificationCenter } from './NotificationCenter';
 import { DiagnosticPanel } from './DiagnosticPanel';
 import { FeedbackManagement } from './FeedbackManagement';
+import { DataDebugPanel } from './DataDebugPanel';
+import { DoctorDatabaseDiagnostic } from './DoctorDatabaseDiagnostic';
+import { DatabaseHealthCheck } from './DatabaseHealthCheck';
 import { Navbar } from './Navbar';
 import { toast } from 'sonner@2.0.3';
 import type { Doctor } from '../App';
@@ -42,8 +45,24 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       setPatients(patientsData);
       setDoctors(doctorsData);
       setSessions(sessionsData);
-    } catch (error) {
-      console.error('Error refreshing admin data:', error);
+    } catch (error: any) {
+      console.error('❌ Error refreshing admin data:', {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint
+      });
+      
+      // Show user-friendly error
+      if (error?.message?.includes('session_date')) {
+        toast.error('Database column mismatch detected', {
+          description: 'Please check EMERGENCY_RECOVERY_PLAN.md for fix instructions'
+        });
+      } else {
+        toast.error('Failed to load data', {
+          description: error?.message || 'Unknown error'
+        });
+      }
     }
   };
 
@@ -307,7 +326,16 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
           <TabsContent value="settings" className="space-y-6">
             <div className="space-y-6">
-              {/* Diagnostic Panel */}
+              {/* Database Health Check - PRIORITY #1 */}
+              <DatabaseHealthCheck />
+              
+              {/* Doctor Database Diagnostic - Check for orphaned records */}
+              <DoctorDatabaseDiagnostic />
+              
+              {/* Data Display Diagnostic - Check age/phone showing correctly */}
+              <DataDebugPanel />
+              
+              {/* Connection Diagnostic Panel */}
               <DiagnosticPanel />
               
               <Card>
@@ -342,8 +370,8 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       📚 For deployment instructions and troubleshooting, please refer to:
                     </p>
                     <ul className="text-sm space-y-1 ml-4">
-                      <li>• <code className="bg-muted px-1 py-0.5 rounded">SUPABASE_SETUP.md</code> - Supabase connection guide</li>
-                      <li>• <code className="bg-muted px-1 py-0.5 rounded">DEPLOYMENT.md</code> - Full deployment guide</li>
+                      <li>• <code className="bg-muted px-1 py-0.5 rounded">⚡_IMMEDIATE_ACTION_REQUIRED.md</code> - Emergency fixes</li>
+                      <li>• <code className="bg-muted px-1 py-0.5 rounded">🆘_DATA_RECOVERY_GUIDE.md</code> - Data recovery</li>
                       <li>• <code className="bg-muted px-1 py-0.5 rounded">QUICK_START.md</code> - Quick start guide</li>
                     </ul>
                   </div>
