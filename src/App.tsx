@@ -7,7 +7,7 @@ import { SupabaseDiagnostic } from './components/SupabaseDiagnostic';
 import { Toaster } from './components/ui/sonner';
 import { databaseService } from './utils/database-smart';
 import { supabase } from './utils/supabase-client';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 // User data structure
 export interface User {

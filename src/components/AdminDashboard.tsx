@@ -18,7 +18,7 @@ import { DataDebugPanel } from './DataDebugPanel';
 import { DoctorDatabaseDiagnostic } from './DoctorDatabaseDiagnostic';
 import { DatabaseHealthCheck } from './DatabaseHealthCheck';
 import { Navbar } from './Navbar';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import type { Doctor } from '../App';
 
 interface AdminDashboardProps {

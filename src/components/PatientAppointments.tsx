@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Calendar, Clock, User, MapPin, Phone, AlertCircle, CheckCircle, XCircle, Edit, Trash2, Plus, Loader2 } from 'lucide-react';
 import { databaseService } from '../utils/database-smart';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { TherapySession } from '../App';
 import { schedulingSettings } from '../utils/scheduling-settings';
 import { DoctorLoadTest } from './DoctorLoadTest';

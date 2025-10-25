@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { RefreshCw, Database, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { databaseService } from '../utils/database-smart';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface DataDebugPanelProps {
   userId?: string;

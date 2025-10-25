@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Loader2, AlertTriangle, CheckCircle, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../utils/supabase-client';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface DiagnosticResult {
   profilesWithoutDoctors: any[];

@@ -10,7 +10,7 @@ import {
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { AlertCircle, CheckCircle, Copy, ExternalLink } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 const SQL_FIX = `-- Run this in Supabase SQL Editor to fix RLS recursion
 

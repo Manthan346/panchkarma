@@ -4,7 +4,7 @@ import { Badge } from './ui/badge';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { TrendingUp, Users, Calendar, Activity, DollarSign, Clock, Loader2 } from 'lucide-react';
 import { databaseService } from '../utils/database-smart';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { TherapySession, Patient, ProgressData } from '../App';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];

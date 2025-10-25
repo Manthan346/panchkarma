@@ -11,7 +11,7 @@ import { PatientProgress } from './PatientProgress';
 import { PatientAppointments } from './PatientAppointments';
 import { PatientFeedback } from './PatientFeedback';
 import { Navbar } from './Navbar';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface PatientDashboardProps {
   user: User;

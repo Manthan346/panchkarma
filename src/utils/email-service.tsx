@@ -11,7 +11,7 @@
  * and shows toast notifications.
  */
 
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export interface EmailTemplate {
   to: string;

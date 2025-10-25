@@ -12,7 +12,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Plus, TrendingUp, Activity, Heart, Moon, Smile, Loader2 } from 'lucide-react';
 import { ProgressData } from '../App';
 import { databaseService } from '../utils/database-smart';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface PatientProgressProps {
   userId: string;

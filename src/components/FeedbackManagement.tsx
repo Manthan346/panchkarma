@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Star, MessageSquare, Send, ThumbsUp, ThumbsDown, Loader2, Search, Filter } from 'lucide-react';
 import { databaseService } from '../utils/database-smart';
 import { Feedback } from '../App';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface FeedbackManagementProps {
   userRole: 'admin' | 'doctor';

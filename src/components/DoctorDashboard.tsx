@@ -10,7 +10,7 @@ import { User, TherapySession, Patient } from '../App';
 import { databaseService } from '../utils/database-smart';
 import { Navbar } from './Navbar';
 import { FeedbackManagement } from './FeedbackManagement';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { schedulingSettings } from '../utils/scheduling-settings';
 
 interface DoctorDashboardProps {

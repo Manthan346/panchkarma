@@ -1,4 +1,4 @@
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 // Demo data - Always available and working
 const demoUsers = [

@@ -1,5 +1,5 @@
 import { supabase } from './supabase-client';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 // Helper to generate UUID
 function generateUUID(): string {

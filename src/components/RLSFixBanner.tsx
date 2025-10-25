@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { X, AlertTriangle, Copy, ExternalLink, CheckCircle } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 const SQL_FIX = `-- RLS RECURSION FIX - Run this in Supabase SQL Editor
 

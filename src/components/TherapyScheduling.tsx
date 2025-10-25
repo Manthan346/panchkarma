@@ -13,7 +13,7 @@ import { Switch } from './ui/switch';
 import { Plus, Clock, User, Calendar as CalendarIcon, Edit, Trash2, CheckCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { TherapySession, Doctor } from '../App';
 import { databaseService } from '../utils/database-smart';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { schedulingSettings, SchedulingSettings } from '../utils/scheduling-settings';
 import { emailService } from '../utils/email-service';
 

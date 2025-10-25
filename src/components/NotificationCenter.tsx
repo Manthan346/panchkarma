@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Bell, Send, Settings, Plus, Mail, MessageSquare, Smartphone, Clock, Loader2 } from 'lucide-react';
 import { Notification } from '../App';
 import { databaseService } from '../utils/database-smart';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { emailService } from '../utils/email-service';
 
 export function NotificationCenter() {

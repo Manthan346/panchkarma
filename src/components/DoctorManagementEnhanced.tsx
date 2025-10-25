@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Plus, Search, Eye, Edit, Phone, Mail, Award, Loader2, Key, Copy } from 'lucide-react';
 import { Doctor } from '../App';
 import { databaseService } from '../utils/database-smart';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface DoctorManagementProps {
   doctors?: Doctor[];
